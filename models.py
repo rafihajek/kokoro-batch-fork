@@ -93,6 +93,7 @@ def load_config(config_path: str) -> dict:
             return json.load(f)
 
 # Initialize espeak-ng
+phonemizer_available = False  # Global flag to track if phonemizer is working
 try:
     from phonemizer.backend.espeak.wrapper import EspeakWrapper
     from phonemizer import phonemize
@@ -110,28 +111,49 @@ try:
     # Verify espeak-ng is working
     try:
         test_phonemes = phonemize('test', language='en-us')
-        if not test_phonemes:
-            raise Exception("Phonemization returned empty result")
+        if test_phonemes:
+            phonemizer_available = True
+            print("Phonemizer successfully initialized")
+        else:
+            print("Note: Phonemization returned empty result")
+            print("TTS will work, but phoneme visualization will be disabled")
     except Exception as e:
-        print(f"Warning: espeak-ng test failed: {e}")
-        print("Some functionality may be limited")
+        # Continue without espeak functionality
+        print(f"Note: Phonemizer not available: {e}")
+        print("TTS will work, but phoneme visualization will be disabled")
 
 except ImportError as e:
-    print(f"Warning: Required packages not found: {e}")
-    print("Installing dependencies...")
+    print(f"Installing required phonemizer packages...")
     import subprocess
-    subprocess.check_call(["pip", "install", "espeakng-loader", "phonemizer-fork"])
-    
-    # Try again after installation
-    from phonemizer.backend.espeak.wrapper import EspeakWrapper
-    from phonemizer import phonemize
-    import espeakng_loader
-    
-    library_path = espeakng_loader.get_library_path()
-    data_path = espeakng_loader.get_data_path()
-    espeakng_loader.make_library_available()
-    EspeakWrapper.library_path = library_path
-    EspeakWrapper.data_path = data_path
+    try:
+        subprocess.check_call(["pip", "install", "espeakng-loader", "phonemizer-fork"])
+        
+        # Try again after installation
+        from phonemizer.backend.espeak.wrapper import EspeakWrapper
+        from phonemizer import phonemize
+        import espeakng_loader
+        
+        library_path = espeakng_loader.get_library_path()
+        data_path = espeakng_loader.get_data_path()
+        espeakng_loader.make_library_available()
+        EspeakWrapper.library_path = library_path
+        EspeakWrapper.data_path = data_path
+        
+        # Test if it works now
+        try:
+            test_phonemes = phonemize('test', language='en-us')
+            if test_phonemes:
+                phonemizer_available = True
+                print("Phonemizer successfully initialized")
+            else:
+                print("Note: Phonemization returned empty result")
+                print("TTS will work, but phoneme visualization will be disabled")
+        except Exception as e:
+            print(f"Note: Phonemizer still not functional: {e}")
+            print("TTS will work, but phoneme visualization will be disabled")
+    except Exception as e:
+        print(f"Note: Could not install or initialize phonemizer: {e}")
+        print("TTS will work, but phoneme visualization will be disabled")
 
 # Initialize pipeline globally
 _pipeline = None
