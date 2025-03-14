@@ -148,48 +148,119 @@ def main() -> None:
                 all_audio = []
                 voice_path = os.path.abspath(os.path.join("voices", f"{voice}.pt"))
                 
-                # Set a timeout for generation
-                max_gen_time = 300  # 5 minutes max
+                # Verify voice file exists
+                if not os.path.exists(voice_path):
+                    print(f"Error: Voice file not found: {voice_path}")
+                    continue
+                
+                # Set a timeout for generation with per-segment timeout
+                max_gen_time = 300  # 5 minutes max total
+                max_segment_time = 60  # 60 seconds max per segment
                 start_time = time.time()
+                segment_start_time = start_time
                 
                 try:
-                    generator = model(text, voice=voice_path, speed=speed, split_pattern=r'\n+')
+                    # Setup watchdog timer for overall process
+                    import threading
+                    generation_complete = False
                     
+                    def watchdog_timer():
+                        if not generation_complete:
+                            print("\nWatchdog: Generation taking too long, process will be cancelled")
+                            # Can't directly interrupt generator, but this will inform user
+                    
+                    # Start watchdog timer
+                    watchdog = threading.Timer(max_gen_time, watchdog_timer)
+                    watchdog.daemon = True  # Don't prevent program exit
+                    watchdog.start()
+                    
+                    # Initialize generator
+                    try:
+                        generator = model(text, voice=voice_path, speed=speed, split_pattern=r'\n+')
+                    except (ValueError, TypeError, RuntimeError) as e:
+                        print(f"Error initializing speech generator: {e}")
+                        watchdog.cancel()
+                        continue
+                    except Exception as e:
+                        print(f"Unexpected error initializing generator: {type(e).__name__}: {e}")
+                        watchdog.cancel()
+                        continue
+                    
+                    # Process segments
                     with tqdm(desc="Generating speech") as pbar:
                         for gs, ps, audio in generator:
-                            # Check timeout
-                            if time.time() - start_time > max_gen_time:
-                                print("\nWarning: Generation taking too long, stopping")
+                            # Check overall timeout
+                            current_time = time.time()
+                            if current_time - start_time > max_gen_time:
+                                print("\nWarning: Total generation time exceeded limit, stopping")
                                 break
-                                
+                            
+                            # Check per-segment timeout
+                            segment_elapsed = current_time - segment_start_time
+                            if segment_elapsed > max_segment_time:
+                                print(f"\nWarning: Segment took too long ({segment_elapsed:.1f}s), stopping")
+                                break
+                            
+                            # Reset segment timer
+                            segment_start_time = current_time
+                            
+                            # Process audio if available
                             if audio is not None:
-                                # Consistent handling of audio data type
-                                if isinstance(audio, np.ndarray):
-                                    audio_tensor = torch.from_numpy(audio).float()
-                                else:
-                                    audio_tensor = audio
-                                    
+                                # Only convert if it's a numpy array, not if already tensor
+                                audio_tensor = audio if isinstance(audio, torch.Tensor) else torch.from_numpy(audio).float()
+                                
                                 all_audio.append(audio_tensor)
                                 print(f"\nGenerated segment: {gs}")
                                 if ps:  # Only print phonemes if available
                                     print(f"Phonemes: {ps}")
                                 pbar.update(1)
+                    
+                    # Mark generation as complete (for watchdog)
+                    generation_complete = True
+                    watchdog.cancel()
+                    
+                except ValueError as e:
+                    print(f"Value error during speech generation: {e}")
+                except RuntimeError as e:
+                    print(f"Runtime error during speech generation: {e}")
+                    # If CUDA out of memory, provide more helpful message
+                    if "CUDA out of memory" in str(e):
+                        print("CUDA out of memory error - try using a shorter text or switching to CPU")
+                except KeyError as e:
+                    print(f"Key error during speech generation: {e}")
+                    print("This might be caused by a missing voice configuration")
+                except FileNotFoundError as e:
+                    print(f"File not found: {e}")
                 except Exception as e:
-                    print(f"Error during speech generation: {e}")
+                    print(f"Unexpected error during speech generation: {type(e).__name__}: {e}")
+                    import traceback
+                    traceback.print_exc()
                 
                 # Save audio
                 if all_audio:
                     try:
-                        # Handle empty tensor list
-                        if len(all_audio) > 0:
-                            final_audio = torch.cat(all_audio, dim=0)
-                            output_path = Path(DEFAULT_OUTPUT_FILE)
-                            if save_audio_with_retry(final_audio.numpy(), SAMPLE_RATE, output_path):
-                                print(f"\nAudio saved to {output_path.absolute()}")
+                        # Handle single segment case without concatenation
+                        if len(all_audio) == 1:
+                            final_audio = all_audio[0]
                         else:
-                            print("No audio segments were generated")
+                            try:
+                                final_audio = torch.cat(all_audio, dim=0)
+                            except RuntimeError as e:
+                                print(f"Error concatenating audio segments: {e}")
+                                continue
+                        
+                        output_path = Path(DEFAULT_OUTPUT_FILE)
+                        if save_audio_with_retry(final_audio.numpy(), SAMPLE_RATE, output_path):
+                            print(f"\nAudio saved to {output_path.absolute()}")
+                            # Play a system beep to indicate completion
+                            try:
+                                print('\a')  # ASCII bell - should make a sound on most systems
+                            except:
+                                pass
+                        else:
+                            print("Failed to save audio file")
                     except Exception as e:
-                        print(f"Error processing audio: {e}")
+                        print(f"Error processing audio: {type(e).__name__}: {e}")
                 else:
                     print("Error: Failed to generate audio")
                     
@@ -205,29 +276,79 @@ def main() -> None:
         import traceback
         traceback.print_exc()
     finally:
-        # Cleanup with error handling
+        # Comprehensive cleanup with error handling
         try:
+            print("\nPerforming cleanup...")
+            
             # Ensure model is properly released
             if 'model' in locals() and model is not None:
                 print("Cleaning up model resources...")
-                # First clear any references
+                # First clear any references to voice models
                 if hasattr(model, 'voices'):
-                    model.voices.clear()
-                # Then delete the model
-                del model
-                model = None
+                    try:
+                        voices_count = len(model.voices)
+                        model.voices.clear()
+                        print(f"Cleared {voices_count} voice references")
+                    except Exception as voice_error:
+                        print(f"Error clearing voice references: {voice_error}")
                 
+                # Clear any other model attributes that might hold references
+                try:
+                    for attr in list(model.__dict__.keys()):
+                        if hasattr(model, attr) and not attr.startswith('__'):
+                            try:
+                                delattr(model, attr)
+                            except:
+                                pass
+                except Exception as attr_error:
+                    print(f"Error clearing model attributes: {attr_error}")
+                    
+                # Then delete the model
+                try:
+                    del model
+                    model = None
+                    print("Model reference deleted")
+                except Exception as del_error:
+                    print(f"Error deleting model: {del_error}")
+            
+            # Clean up voice cache
+            if 'voices_cache' in locals() and voices_cache is not None:
+                try:
+                    voices_cache.clear()
+                    voices_cache = None
+                    print("Voice cache cleared")
+                except Exception as cache_error:
+                    print(f"Error clearing voice cache: {cache_error}")
+            
             # Clean up any CUDA resources
             if torch.cuda.is_available():
-                print("Cleaning up CUDA resources...")
-                torch.cuda.empty_cache()
+                try:
+                    print("Cleaning up CUDA resources...")
+                    torch.cuda.empty_cache()
+                    print("CUDA cache emptied")
+                except Exception as cuda_error:
+                    print(f"Error clearing CUDA cache: {cuda_error}")
+            
+            # Make sure patched functions are restored
+            try:
+                from models import _cleanup_monkey_patches
+                _cleanup_monkey_patches()
+                print("Monkey patches restored")
+            except Exception as patch_error:
+                print(f"Error restoring monkey patches: {patch_error}")
+            
+            # Final garbage collection
+            try:
+                import gc
+                gc.collect()
+                print("Garbage collection completed")
+            except Exception as gc_error:
+                print(f"Error during garbage collection: {gc_error}")
                 
-            # Make sure patched functions are restored (belt and suspenders approach)
-            from models import _cleanup_monkey_patches
-            _cleanup_monkey_patches()
+            print("Cleanup completed")
             
         except Exception as e:
-            print(f"Error during cleanup: {e}")
+            print(f"Error during cleanup: {type(e).__name__}: {e}")
             import traceback
             traceback.print_exc()
 
