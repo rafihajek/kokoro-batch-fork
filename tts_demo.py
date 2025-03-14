@@ -127,17 +127,28 @@ def main() -> None:
                 
                 # Generate speech
                 all_audio = []
-                generator = model(text, voice=f"voices/{voice}.pt", speed=speed, split_pattern=r'\n+')
                 
-                with tqdm(desc="Generating speech") as pbar:
-                    for gs, ps, audio in generator:
-                        if audio is not None:
-                            if isinstance(audio, np.ndarray):
-                                audio = torch.from_numpy(audio).float()
-                            all_audio.append(audio)
-                            print(f"\nGenerated segment: {gs}")
-                            print(f"Phonemes: {ps}")
-                            pbar.update(1)
+                # Use the improved generate_speech function that handles unusual words
+                print(f"\nProcessing text for TTS generation...")
+                audio, phonemes = generate_speech(model, text, voice, DEFAULT_LANGUAGE, device, speed)
+                
+                if audio is not None:
+                    all_audio.append(audio)
+                    print(f"\nGenerated speech successfully")
+                    print(f"Phonemes: {phonemes}")
+                else:
+                    print("\nFalling back to direct model call...")
+                    generator = model(text, voice=f"voices/{voice}.pt", speed=speed, split_pattern=r'\n+')
+                    
+                    with tqdm(desc="Generating speech") as pbar:
+                        for gs, ps, audio in generator:
+                            if audio is not None:
+                                if isinstance(audio, np.ndarray):
+                                    audio = torch.from_numpy(audio).float()
+                                all_audio.append(audio)
+                                print(f"\nGenerated segment: {gs}")
+                                print(f"Phonemes: {ps}")
+                                pbar.update(1)
                 
                 # Save audio
                 if all_audio:

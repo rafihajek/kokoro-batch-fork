@@ -101,16 +101,25 @@ def generate_tts_with_logs(voice_name, text, format):
         print(f"\nGenerating speech for: '{text}'")
         print(f"Using voice: {voice_name}")
         
-        generator = model(text, voice=f"voices/{voice_name}.pt", speed=1.0, split_pattern=r'\n+')
+        # Use the improved generate_speech function that handles unusual words
+        audio, phonemes = generate_speech(model, text, voice_name, "a", device, 1.0)
         
         all_audio = []
-        for gs, ps, audio in generator:
-            if audio is not None:
-                if isinstance(audio, np.ndarray):
-                    audio = torch.from_numpy(audio).float()
-                all_audio.append(audio)
-                print(f"Generated segment: {gs}")
-                print(f"Phonemes: {ps}")
+        if audio is not None:
+            all_audio.append(audio)
+            print(f"Generated speech successfully")
+            print(f"Phonemes: {phonemes}")
+        else:
+            print("Falling back to direct model call...")
+            generator = model(text, voice=f"voices/{voice_name}.pt", speed=1.0, split_pattern=r'\n+')
+            
+            for gs, ps, audio in generator:
+                if audio is not None:
+                    if isinstance(audio, np.ndarray):
+                        audio = torch.from_numpy(audio).float()
+                    all_audio.append(audio)
+                    print(f"Generated segment: {gs}")
+                    print(f"Phonemes: {ps}")
         
         if not all_audio:
             raise Exception("No audio generated")

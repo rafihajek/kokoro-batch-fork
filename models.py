@@ -365,11 +365,31 @@ def generate_speech(
             
         if voice_name not in model.voices:
             raise ValueError(f"Failed to load voice {voice_name}")
+        
+        # Fix for rare words: pre-process text to add spaces between characters of unusual words
+        # This helps prevent the model from silently skipping words it doesn't recognize
+        import re
+        
+        # Define a pattern for unusual words (words with uncommon letter combinations)
+        # This simple pattern looks for words that might be unusual
+        unusual_word_pattern = r'\b[a-zA-Z]{4,}([^a-zA-Z\s]?[a-zA-Z]{2,}){1,}\b'
+        
+        def add_spaces_to_unusual_words(match):
+            word = match.group(0)
+            # Check if word has unusual character combinations
+            if any(combo in word.lower() for combo in ['gry', 'zzk', 'tz', 'qz']):
+                return ' '.join(word)
+            return word
+        
+        # Process text to separate characters in unusual words
+        processed_text = re.sub(unusual_word_pattern, add_spaces_to_unusual_words, text)
+        print(f"Original text: {text}")
+        print(f"Processed text: {processed_text}")
             
         # Generate speech with the new API
         print(f"Generating speech with device: {model.device}")
         generator = model(
-            text, 
+            processed_text, 
             voice=voice_path,
             speed=speed,
             split_pattern=r'\n+'
