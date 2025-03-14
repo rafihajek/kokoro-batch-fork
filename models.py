@@ -14,19 +14,49 @@ os.environ["PYTHONIOENCODING"] = "utf-8"
 # Disable symlinks warning
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
-# Set up exit handler to restore monkey-patched functions
+# Setup for safer monkey-patching
 import atexit
+import signal
+import sys
+
+# Track whether patches have been applied
+_patches_applied = {
+    'json_load': False,
+    'load_voice': False
+}
 
 def _cleanup_monkey_patches():
     """Restore original functions that were monkey-patched"""
     try:
-        restore_json_load()
-        restore_original_load_voice()
+        if _patches_applied['json_load']:
+            restore_json_load()
+            _patches_applied['json_load'] = False
+            print("Restored original json.load function")
     except Exception as e:
-        print(f"Warning: Error during cleanup of monkey-patched functions: {e}")
+        print(f"Warning: Error restoring json.load: {e}")
+        
+    try:
+        if _patches_applied['load_voice']:
+            restore_original_load_voice()
+            _patches_applied['load_voice'] = False
+            print("Restored original KPipeline.load_voice function")
+    except Exception as e:
+        print(f"Warning: Error restoring KPipeline.load_voice: {e}")
 
-# Register cleanup function to run at exit
+# Register cleanup for normal exit
 atexit.register(_cleanup_monkey_patches)
+
+# Register cleanup for signals
+for sig in [signal.SIGINT, signal.SIGTERM]:
+    try:
+        signal.signal(sig, lambda signum, frame: (
+            print(f"\nReceived signal {signum}, cleaning up..."), 
+            _cleanup_monkey_patches(),
+            sys.exit(1)
+        ))
+    except (ValueError, AttributeError):
+        # Some signals might not be available on all platforms
+        pass
 
 # List of available voice files
 VOICE_FILES = [
@@ -78,14 +108,20 @@ def patched_load_voice(self, voice_path):
 
 # Apply the patch
 KPipeline.load_voice = patched_load_voice
+_patches_applied['load_voice'] = True
 
 # Store original function for restoration if needed
 def restore_original_load_voice():
-    KPipeline.load_voice = original_load_voice
+    global _patches_applied
+    if _patches_applied['load_voice']:
+        KPipeline.load_voice = original_load_voice
+        _patches_applied['load_voice'] = False
 
 def patch_json_load():
     """Patch json.load to handle UTF-8 encoded files with special characters"""
+    global _patches_applied, _original_json_load
     original_load = json.load
+    _original_json_load = original_load  # Store for restoration
     
     def custom_load(fp, *args, **kwargs):
         try:
@@ -112,6 +148,7 @@ def patch_json_load():
                 raise
     
     json.load = custom_load
+    _patches_applied['json_load'] = True
     return original_load  # Return original for restoration
 
 # Store the original load function for potential restoration
@@ -119,10 +156,11 @@ _original_json_load = None
 
 def restore_json_load():
     """Restore the original json.load function"""
-    global _original_json_load
-    if _original_json_load is not None:
+    global _original_json_load, _patches_applied
+    if _original_json_load is not None and _patches_applied['json_load']:
         json.load = _original_json_load
         _original_json_load = None
+        _patches_applied['json_load'] = False
 
 def load_config(config_path: str) -> dict:
     """Load configuration file with proper encoding handling"""
@@ -245,11 +283,11 @@ def build_model(model_path: str, device: str, repo_version: str = "main") -> KPi
     Returns:
         Initialized KPipeline instance
     """
-    global _pipeline, _original_json_load
+    global _pipeline
     if _pipeline is None:
         try:
             # Patch json loading before initializing pipeline
-            _original_json_load = patch_json_load()
+            patch_json_load()
             
             # Download model if it doesn't exist
             if model_path is None:

@@ -207,12 +207,29 @@ def main() -> None:
     finally:
         # Cleanup with error handling
         try:
+            # Ensure model is properly released
             if 'model' in locals() and model is not None:
+                print("Cleaning up model resources...")
+                # First clear any references
+                if hasattr(model, 'voices'):
+                    model.voices.clear()
+                # Then delete the model
                 del model
+                model = None
+                
+            # Clean up any CUDA resources
             if torch.cuda.is_available():
+                print("Cleaning up CUDA resources...")
                 torch.cuda.empty_cache()
+                
+            # Make sure patched functions are restored (belt and suspenders approach)
+            from models import _cleanup_monkey_patches
+            _cleanup_monkey_patches()
+            
         except Exception as e:
             print(f"Error during cleanup: {e}")
+            import traceback
+            traceback.print_exc()
 
 if __name__ == "__main__":
     main() 
