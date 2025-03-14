@@ -29,15 +29,28 @@ import soundfile as sf
 from pydub import AudioSegment
 import torch
 import numpy as np
+from typing import Union, List, Optional, Tuple
 from models import (
     list_available_voices, build_model,
     generate_speech, download_voice_files
 )
 
+# Define path type for consistent handling
+PathLike = Union[str, Path]
+
+# Configuration validation
+def validate_sample_rate(rate: int) -> int:
+    """Validate sample rate is within acceptable range"""
+    valid_rates = [16000, 22050, 24000, 44100, 48000]
+    if rate not in valid_rates:
+        print(f"Warning: Unusual sample rate {rate}. Valid rates are {valid_rates}")
+        return 24000  # Default to safe value
+    return rate
+
 # Global configuration
-CONFIG_FILE = "tts_config.json"  # Stores user preferences and paths
-DEFAULT_OUTPUT_DIR = "outputs"    # Directory for generated audio files
-SAMPLE_RATE = 24000  # Updated from 22050 to match new model
+CONFIG_FILE = Path("tts_config.json")  # Stores user preferences and paths
+DEFAULT_OUTPUT_DIR = Path("outputs")    # Directory for generated audio files
+SAMPLE_RATE = validate_sample_rate(24000)  # Validated sample rate
 
 # Initialize model globally
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -64,23 +77,70 @@ def get_available_voices():
         print(f"Error getting voices: {e}")
         return []
 
-def convert_audio(input_path: str, output_path: str, format: str):
-    """Convert audio to specified format."""
+def convert_audio(input_path: PathLike, output_path: PathLike, format: str) -> Optional[PathLike]:
+    """Convert audio to specified format.
+    
+    Args:
+        input_path: Path to input audio file
+        output_path: Path to output audio file
+        format: Output format ('wav', 'mp3', or 'aac')
+        
+    Returns:
+        Path to output file or None on error
+    """
     try:
-        if format == "wav":
+        # Normalize paths
+        input_path = Path(input_path).absolute()
+        output_path = Path(output_path).absolute()
+        
+        # Validate input file
+        if not input_path.exists():
+            raise FileNotFoundError(f"Input file not found: {input_path}")
+            
+        # For WAV format, just return the input path
+        if format.lower() == "wav":
             return input_path
-        audio = AudioSegment.from_wav(input_path)
-        if format == "mp3":
-            audio.export(output_path, format="mp3", bitrate="192k")
-        elif format == "aac":
-            audio.export(output_path, format="aac", bitrate="192k")
+            
+        # Create output directory if it doesn't exist
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Convert format
+        audio = AudioSegment.from_wav(str(input_path))
+        
+        # Select proper format and options
+        if format.lower() == "mp3":
+            audio.export(str(output_path), format="mp3", bitrate="192k")
+        elif format.lower() == "aac":
+            audio.export(str(output_path), format="aac", bitrate="192k")
+        else:
+            raise ValueError(f"Unsupported format: {format}")
+            
+        # Verify file was created
+        if not output_path.exists() or output_path.stat().st_size == 0:
+            raise IOError(f"Failed to create {format} file")
+            
         return output_path
+        
+    except (IOError, FileNotFoundError, ValueError) as e:
+        print(f"Error converting audio: {type(e).__name__}: {e}")
+        return None
     except Exception as e:
-        print(f"Error converting audio: {e}")
-        return input_path
+        print(f"Unexpected error converting audio: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
-def generate_tts_with_logs(voice_name, text, format):
-    """Generate TTS audio with progress logging."""
+def generate_tts_with_logs(voice_name: str, text: str, format: str) -> Optional[PathLike]:
+    """Generate TTS audio with progress logging.
+    
+    Args:
+        voice_name: Name of the voice to use
+        text: Text to convert to speech
+        format: Output format ('wav', 'mp3', 'aac')
+        
+    Returns:
+        Path to generated audio file or None on error
+    """
     global model
     
     try:
@@ -90,7 +150,7 @@ def generate_tts_with_logs(voice_name, text, format):
             model = build_model(None, device)
         
         # Create output directory
-        os.makedirs(DEFAULT_OUTPUT_DIR, exist_ok=True)
+        DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         
         # Validate input text
         if not text or not text.strip():
@@ -105,15 +165,15 @@ def generate_tts_with_logs(voice_name, text, format):
         # Generate base filename from text
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_name = f"tts_{timestamp}"
-        wav_path = os.path.join(DEFAULT_OUTPUT_DIR, f"{base_name}.wav")
+        wav_path = DEFAULT_OUTPUT_DIR / f"{base_name}.wav"
         
         # Generate speech
         print(f"\nGenerating speech for: '{text}'")
         print(f"Using voice: {voice_name}")
         
-        # Validate voice path
-        voice_path = os.path.abspath(os.path.join("voices", f"{voice_name}.pt"))
-        if not os.path.exists(voice_path):
+        # Validate voice path using Path for consistent handling
+        voice_path = Path("voices").absolute() / f"{voice_name}.pt"
+        if not voice_path.exists():
             raise FileNotFoundError(f"Voice file not found: {voice_path}")
             
         try:
@@ -162,9 +222,9 @@ def generate_tts_with_logs(voice_name, text, format):
             raise Exception(f"Failed to save audio file: {e}")
         
         # Convert to requested format if needed
-        if format != "wav":
-            output_path = os.path.join(DEFAULT_OUTPUT_DIR, f"{base_name}.{format}")
-            return convert_audio(wav_path, output_path, format)
+        if format.lower() != "wav":
+            output_path = DEFAULT_OUTPUT_DIR / f"{base_name}.{format.lower()}"
+            return convert_audio(wav_path, output_path, format.lower())
         
         return wav_path
         
@@ -232,26 +292,97 @@ def cleanup_resources():
         # Clean up model resources
         if model is not None:
             print("Releasing model resources...")
+            
             # Clear voice dictionary to release memory
-            if hasattr(model, 'voices'):
-                model.voices.clear()
+            if hasattr(model, 'voices') and model.voices is not None:
+                try:
+                    voice_count = len(model.voices)
+                    for voice_name in list(model.voices.keys()):
+                        try:
+                            # Release each voice explicitly
+                            model.voices[voice_name] = None
+                        except:
+                            pass
+                    model.voices.clear()
+                    print(f"Cleared {voice_count} voice references")
+                except Exception as ve:
+                    print(f"Error clearing voices: {type(ve).__name__}: {ve}")
+            
+            # Clear model attributes that might hold tensors
+            for attr_name in dir(model):
+                if not attr_name.startswith('__') and hasattr(model, attr_name):
+                    try:
+                        attr = getattr(model, attr_name)
+                        # Handle specific tensor attributes
+                        if isinstance(attr, torch.Tensor):
+                            if attr.is_cuda:
+                                print(f"Releasing CUDA tensor: {attr_name}")
+                                setattr(model, attr_name, None)
+                        elif hasattr(attr, 'to'):  # Module or Tensor-like object
+                            setattr(model, attr_name, None)
+                    except:
+                        pass
+            
             # Delete model reference
-            del model
-            model = None
-            
-        # Clear CUDA cache if available
-        if torch.cuda.is_available():
-            print("Clearing CUDA cache...")
-            torch.cuda.empty_cache()
-            
-        # Restore original functions
-        from models import _cleanup_monkey_patches
-        _cleanup_monkey_patches()
+            try:
+                del model
+                model = None
+                print("Model reference deleted")
+            except Exception as me:
+                print(f"Error deleting model: {type(me).__name__}: {me}")
         
+        # Clear CUDA memory explicitly
+        if torch.cuda.is_available():
+            try:
+                # Get initial memory usage 
+                try:
+                    initial = torch.cuda.memory_allocated()
+                    initial_mb = initial / (1024 * 1024)
+                    print(f"CUDA memory before cleanup: {initial_mb:.2f} MB")
+                except:
+                    pass
+                
+                # Free memory  
+                print("Clearing CUDA cache...")
+                torch.cuda.empty_cache()
+                
+                # Force synchronization
+                try:
+                    torch.cuda.synchronize()
+                except:
+                    pass
+                
+                # Get final memory usage
+                try:
+                    final = torch.cuda.memory_allocated()
+                    final_mb = final / (1024 * 1024)
+                    freed_mb = (initial - final) / (1024 * 1024)
+                    print(f"CUDA memory after cleanup: {final_mb:.2f} MB (freed {freed_mb:.2f} MB)")
+                except:
+                    pass
+            except Exception as ce:
+                print(f"Error clearing CUDA memory: {type(ce).__name__}: {ce}")
+        
+        # Restore original functions
+        try:
+            from models import _cleanup_monkey_patches
+            _cleanup_monkey_patches()
+            print("Monkey patches restored")
+        except Exception as pe:
+            print(f"Error restoring monkey patches: {type(pe).__name__}: {pe}")
+        
+        # Final garbage collection
+        try:
+            import gc
+            collected = gc.collect()
+            print(f"Garbage collection completed: {collected} objects collected")
+        except Exception as gce:
+            print(f"Error during garbage collection: {type(gce).__name__}: {gce}")
+            
         print("Cleanup completed")
         
     except Exception as e:
-        print(f"Error during cleanup: {e}")
+        print(f"Error during cleanup: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
 

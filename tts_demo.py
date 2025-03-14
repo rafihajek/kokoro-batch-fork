@@ -1,5 +1,5 @@
 import torch
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Union
 from models import build_model, generate_speech, list_available_voices
 from tqdm.auto import tqdm
 import soundfile as sf
@@ -7,13 +7,37 @@ from pathlib import Path
 import numpy as np
 import time
 import os
+import sys
 
-# Constants
-SAMPLE_RATE = 24000
-DEFAULT_MODEL_PATH = os.path.abspath('kokoro-v1_0.pth')
-DEFAULT_OUTPUT_FILE = os.path.abspath('output.wav')
-DEFAULT_LANGUAGE = 'a'  # 'a' for American English, 'b' for British English
+# Define path type for consistent handling
+PathLike = Union[str, Path]
+
+# Constants with validation
+def validate_sample_rate(rate: int) -> int:
+    """Validate sample rate is within acceptable range"""
+    valid_rates = [16000, 22050, 24000, 44100, 48000]
+    if rate not in valid_rates:
+        print(f"Warning: Unusual sample rate {rate}. Valid rates are {valid_rates}")
+        return 24000  # Default to safe value
+    return rate
+
+def validate_language(lang: str) -> str:
+    """Validate language code"""
+    valid_langs = ['a', 'b']  # 'a' for American English, 'b' for British English
+    if lang not in valid_langs:
+        print(f"Warning: Invalid language code '{lang}'. Using 'a' (American English).")
+        return 'a'  # Default to American English
+    return lang
+
+# Define and validate constants
+SAMPLE_RATE = validate_sample_rate(24000)
+DEFAULT_MODEL_PATH = Path('kokoro-v1_0.pth').absolute()
+DEFAULT_OUTPUT_FILE = Path('output.wav').absolute()
+DEFAULT_LANGUAGE = validate_language('a')  # 'a' for American English, 'b' for British English
 DEFAULT_TEXT = "Hello, welcome to this text-to-speech test."
+
+# Ensure output directory exists
+DEFAULT_OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 # Configure tqdm for better Windows console support
 tqdm.monitor_interval = 0
@@ -65,19 +89,41 @@ def get_speed() -> float:
         except ValueError:
             print("Please enter a valid number.")
 
-def save_audio_with_retry(audio_data: np.ndarray, sample_rate: int, output_path: Path, max_retries: int = 3, retry_delay: float = 1.0) -> bool:
+def save_audio_with_retry(audio_data: np.ndarray, sample_rate: int, output_path: PathLike, max_retries: int = 3, retry_delay: float = 1.0) -> bool:
     """
     Attempt to save audio data to file with retry logic.
-    Returns True if successful, False otherwise.
+    
+    Args:
+        audio_data: Audio data as numpy array
+        sample_rate: Sample rate in Hz
+        output_path: Path to save the audio file
+        max_retries: Maximum number of retry attempts
+        retry_delay: Delay between retries in seconds
+        
+    Returns:
+        True if successful, False otherwise
     """
-    # Make sure output_path is an absolute path
-    output_path = Path(os.path.abspath(output_path))
+    # Convert and normalize path to Path object
+    output_path = Path(output_path).absolute()
+    
+    # Create parent directory if it doesn't exist
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     
     for attempt in range(max_retries):
         try:
+            # Validate audio data before saving
+            if audio_data is None or len(audio_data) == 0:
+                raise ValueError("Empty audio data")
+                
+            # Check write permissions for the directory
+            if not os.access(str(output_path.parent), os.W_OK):
+                raise PermissionError(f"No write permission for directory: {output_path.parent}")
+                
+            # Save audio file
             sf.write(str(output_path), audio_data, sample_rate)
             return True
-        except Exception as e:
+            
+        except (IOError, PermissionError) as e:
             if attempt < max_retries - 1:
                 print(f"\nFailed to save audio (attempt {attempt + 1}/{max_retries}): {e}")
                 print("The output file might be in use by another program (e.g., media player).")
@@ -88,6 +134,10 @@ def save_audio_with_retry(audio_data: np.ndarray, sample_rate: int, output_path:
                 print(f"\nError: Could not save audio after {max_retries} attempts: {e}")
                 print(f"Please ensure '{output_path}' is not open in any other program and try again.")
                 return False
+        except Exception as e:
+            print(f"\nUnexpected error saving audio: {type(e).__name__}: {e}")
+            return False
+            
     return False
 
 def main() -> None:
@@ -146,10 +196,11 @@ def main() -> None:
                 
                 # Generate speech
                 all_audio = []
-                voice_path = os.path.abspath(os.path.join("voices", f"{voice}.pt"))
+                # Use Path object for consistent path handling
+                voice_path = Path("voices").absolute() / f"{voice}.pt"
                 
                 # Verify voice file exists
-                if not os.path.exists(voice_path):
+                if not voice_path.exists():
                     print(f"Error: Voice file not found: {voice_path}")
                     continue
                 
@@ -249,9 +300,10 @@ def main() -> None:
                                 print(f"Error concatenating audio segments: {e}")
                                 continue
                         
+                        # Use consistent Path object
                         output_path = Path(DEFAULT_OUTPUT_FILE)
                         if save_audio_with_retry(final_audio.numpy(), SAMPLE_RATE, output_path):
-                            print(f"\nAudio saved to {output_path.absolute()}")
+                            print(f"\nAudio saved to {output_path}")
                             # Play a system beep to indicate completion
                             try:
                                 print('\a')  # ASCII bell - should make a sound on most systems
