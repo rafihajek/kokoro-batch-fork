@@ -212,36 +212,63 @@ except ImportError as e:
 # Initialize pipeline globally
 _pipeline = None
 
-def download_voice_files(voice_files=None, repo_version="main"):
+def download_voice_files(voice_files=None, repo_version="main", required_count=1):
     """Download voice files from Hugging Face.
     
     Args:
         voice_files: Optional list of voice files to download. If None, download all VOICE_FILES.
         repo_version: Version/tag of the repository to use (default: "main")
+        required_count: Minimum number of voices required (default: 1)
+        
+    Returns:
+        List of successfully downloaded voice files
+        
+    Raises:
+        ValueError: If fewer than required_count voices could be downloaded
     """
     # Use absolute path for voices directory
     voices_dir = Path(os.path.abspath("voices"))
     voices_dir.mkdir(exist_ok=True)
     
+    # Import here to avoid startup dependency
     from huggingface_hub import hf_hub_download
     downloaded_voices = []
+    failed_voices = []
     
     # If specific voice files are requested, use those. Otherwise use all.
     files_to_download = voice_files if voice_files is not None else VOICE_FILES
+    total_files = len(files_to_download)
     
-    print("\nDownloading voice files...")
-    temp_dir = None
+    print(f"\nDownloading voice files... ({total_files} total files)")
+    
+    # Check for existing voice files first
+    existing_files = []
+    for voice_file in files_to_download:
+        voice_path = voices_dir / voice_file
+        if voice_path.exists():
+            print(f"Voice file {voice_file} already exists")
+            downloaded_voices.append(voice_file)
+            existing_files.append(voice_file)
+    
+    # Remove existing files from the download list
+    files_to_download = [f for f in files_to_download if f not in existing_files]
+    if not files_to_download and downloaded_voices:
+        print(f"All required voice files already exist ({len(downloaded_voices)} files)")
+        return downloaded_voices
+        
+    # Proceed with downloading missing files
+    retry_count = 3
     try:
-        # Create a temporary directory with a context manager
         import tempfile
         with tempfile.TemporaryDirectory() as temp_dir:
             for voice_file in files_to_download:
-                try:
-                    # Full path where the voice file should be
-                    voice_path = voices_dir / voice_file
-                    
-                    if not voice_path.exists():
-                        print(f"Downloading {voice_file}...")
+                # Full path where the voice file should be
+                voice_path = voices_dir / voice_file
+                
+                # Try with retries
+                for attempt in range(retry_count):
+                    try:
+                        print(f"Downloading {voice_file}... (attempt {attempt+1}/{retry_count})")
                         # Download to a temporary location first
                         temp_path = hf_hub_download(
                             repo_id="hexgrad/Kokoro-82M",
@@ -254,19 +281,39 @@ def download_voice_files(voice_files=None, repo_version="main"):
                         # Move the file to the correct location
                         os.makedirs(os.path.dirname(str(voice_path)), exist_ok=True)
                         shutil.copy2(temp_path, str(voice_path))  # Use copy2 instead of move
-                        downloaded_voices.append(voice_file)
-                        print(f"Successfully downloaded {voice_file}")
-                    else:
-                        print(f"Voice file {voice_file} already exists")
-                        downloaded_voices.append(voice_file)
-                except (IOError, OSError, ValueError, FileNotFoundError, ConnectionError) as e:
-                    print(f"Warning: Failed to download {voice_file}: {e}")
-                    continue
+                        
+                        # Verify file integrity
+                        if os.path.getsize(str(voice_path)) > 0:
+                            downloaded_voices.append(voice_file)
+                            print(f"Successfully downloaded {voice_file}")
+                            break  # Success, exit retry loop
+                        else:
+                            print(f"Warning: Downloaded file {voice_file} has zero size, retrying...")
+                            os.remove(str(voice_path))  # Remove invalid file
+                            if attempt == retry_count - 1:
+                                failed_voices.append(voice_file)
+                    except (IOError, OSError, ValueError, FileNotFoundError, ConnectionError) as e:
+                        print(f"Warning: Failed to download {voice_file} (attempt {attempt+1}): {e}")
+                        if attempt == retry_count - 1:
+                            failed_voices.append(voice_file)
+                            print(f"Error: Failed all {retry_count} attempts to download {voice_file}")
     except Exception as e:
         print(f"Error during voice download process: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    # Report results
+    if failed_voices:
+        print(f"Warning: Failed to download {len(failed_voices)} voice files: {', '.join(failed_voices)}")
     
     if not downloaded_voices:
-        print("Warning: No voice files could be downloaded. Please check your internet connection.")
+        error_msg = "No voice files could be downloaded. Please check your internet connection."
+        print(f"Error: {error_msg}")
+        raise ValueError(error_msg)
+    elif len(downloaded_voices) < required_count:
+        error_msg = f"Only {len(downloaded_voices)} voice files could be downloaded, but {required_count} were required."
+        print(f"Error: {error_msg}")
+        raise ValueError(error_msg)
     else:
         print(f"Successfully processed {len(downloaded_voices)} voice files")
     
@@ -327,12 +374,12 @@ def build_model(model_path: str, device: str, repo_version: str = "main") -> KPi
                     print(f"Error downloading config: {e}")
                     raise ValueError(f"Could not download config: {e}") from e
             
-            # Download voice files - validate at least one voice is available
-            downloaded_voices = download_voice_files(repo_version=repo_version)
-            
-            if not downloaded_voices:
-                print("Error: No voice files available. Cannot proceed.")
-                raise ValueError("No voice files available")
+            # Download voice files - require at least one voice
+            try:
+                downloaded_voices = download_voice_files(repo_version=repo_version, required_count=1)
+            except ValueError as e:
+                print(f"Error: Voice files download failed: {e}")
+                raise ValueError("Voice files download failed") from e
             
             # Validate language code
             lang_code = 'a'  # 'a' for American English
