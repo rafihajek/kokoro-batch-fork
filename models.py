@@ -28,7 +28,7 @@ _patches_applied = {
 def _cleanup_monkey_patches():
     """Restore original functions that were monkey-patched"""
     try:
-        if _patches_applied['json_load']:
+        if _patches_applied['json_load'] and _original_json_load is not None:
             restore_json_load()
             _patches_applied['json_load'] = False
             print("Restored original json.load function")
