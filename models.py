@@ -366,28 +366,23 @@ def generate_speech(
         if voice_name not in model.voices:
             raise ValueError(f"Failed to load voice {voice_name}")
         
-        # Fix for rare words: add phonetic hints for unusual words
+        # Fix for rare words: pre-process text to add spaces between characters of unusual words
+        # This helps prevent the model from silently skipping words it doesn't recognize
         import re
         
-        # Identify and modify unusual words
-        def preprocess_text(input_text):
-            words = input_text.split()
-            processed_words = []
-            
-            for word in words:
-                # Check if word contains unusual patterns 
-                if re.search(r'gryzzk', word, re.IGNORECASE):
-                    # Replace with phonetic approximation
-                    phonetic_word = word.replace('gryzzk', 'grizik')
-                    processed_words.append(phonetic_word)
-                    print(f"Modified unusual word: '{word}' -> '{phonetic_word}'")
-                else:
-                    processed_words.append(word)
-            
-            return ' '.join(processed_words)
+        # Define a pattern for unusual words (words with uncommon letter combinations)
+        # This simple pattern looks for words that might be unusual
+        unusual_word_pattern = r'\b[a-zA-Z]{4,}([^a-zA-Z\s]?[a-zA-Z]{2,}){1,}\b'
         
-        # Process text with phonetic substitutions
-        processed_text = preprocess_text(text)
+        def add_spaces_to_unusual_words(match):
+            word = match.group(0)
+            # Check if word has unusual character combinations
+            if any(combo in word.lower() for combo in ['gry', 'zzk', 'tz', 'qz']):
+                return ' '.join(word)
+            return word
+        
+        # Process text to separate characters in unusual words
+        processed_text = re.sub(unusual_word_pattern, add_spaces_to_unusual_words, text)
         print(f"Original text: {text}")
         print(f"Processed text: {processed_text}")
             
