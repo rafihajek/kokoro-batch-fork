@@ -31,7 +31,7 @@ import torch
 import numpy as np
 from models import (
     list_available_voices, build_model,
-    generate_speech
+    generate_speech, download_voice_files
 )
 
 # Global configuration
@@ -92,6 +92,16 @@ def generate_tts_with_logs(voice_name, text, format):
         # Create output directory
         os.makedirs(DEFAULT_OUTPUT_DIR, exist_ok=True)
         
+        # Validate input text
+        if not text or not text.strip():
+            raise ValueError("Text input cannot be empty")
+            
+        # Limit extremely long texts to prevent memory issues
+        MAX_CHARS = 5000
+        if len(text) > MAX_CHARS:
+            print(f"Warning: Text exceeds {MAX_CHARS} characters. Truncating to prevent memory issues.")
+            text = text[:MAX_CHARS] + "..."
+        
         # Generate base filename from text
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_name = f"tts_{timestamp}"
@@ -101,23 +111,55 @@ def generate_tts_with_logs(voice_name, text, format):
         print(f"\nGenerating speech for: '{text}'")
         print(f"Using voice: {voice_name}")
         
-        generator = model(text, voice=f"voices/{voice_name}.pt", speed=1.0, split_pattern=r'\n+')
-        
-        all_audio = []
-        for gs, ps, audio in generator:
-            if audio is not None:
-                if isinstance(audio, np.ndarray):
-                    audio = torch.from_numpy(audio).float()
-                all_audio.append(audio)
-                print(f"Generated segment: {gs}")
-                print(f"Phonemes: {ps}")
-        
-        if not all_audio:
-            raise Exception("No audio generated")
+        # Validate voice path
+        voice_path = os.path.abspath(os.path.join("voices", f"{voice_name}.pt"))
+        if not os.path.exists(voice_path):
+            raise FileNotFoundError(f"Voice file not found: {voice_path}")
+            
+        try:
+            generator = model(text, voice=voice_path, speed=1.0, split_pattern=r'\n+')
+            
+            all_audio = []
+            max_segments = 100  # Safety limit for very long texts
+            segment_count = 0
+            
+            for gs, ps, audio in generator:
+                segment_count += 1
+                if segment_count > max_segments:
+                    print(f"Warning: Reached maximum segment limit ({max_segments})")
+                    break
+                    
+                if audio is not None:
+                    if isinstance(audio, np.ndarray):
+                        audio = torch.from_numpy(audio).float()
+                    all_audio.append(audio)
+                    print(f"Generated segment: {gs}")
+                    if ps:  # Only print phonemes if available
+                        print(f"Phonemes: {ps}")
+            
+            if not all_audio:
+                raise Exception("No audio generated")
+        except Exception as e:
+            raise Exception(f"Error in speech generation: {e}")
             
         # Combine audio segments and save
-        final_audio = torch.cat(all_audio, dim=0)
-        sf.write(wav_path, final_audio.numpy(), SAMPLE_RATE)
+        if not all_audio:
+            raise Exception("No audio segments were generated")
+            
+        # Handle single segment case without concatenation
+        if len(all_audio) == 1:
+            final_audio = all_audio[0]
+        else:
+            try:
+                final_audio = torch.cat(all_audio, dim=0)
+            except RuntimeError as e:
+                raise Exception(f"Failed to concatenate audio segments: {e}")
+                
+        # Save audio file
+        try:
+            sf.write(wav_path, final_audio.numpy(), SAMPLE_RATE)
+        except Exception as e:
+            raise Exception(f"Failed to save audio file: {e}")
         
         # Convert to requested format if needed
         if format != "wav":
@@ -180,5 +222,63 @@ def create_interface(server_name="0.0.0.0", server_port=7860):
         share=True
     )
 
+def cleanup_resources():
+    """Properly clean up resources when the application exits"""
+    global model
+    
+    try:
+        print("Cleaning up resources...")
+        
+        # Clean up model resources
+        if model is not None:
+            print("Releasing model resources...")
+            # Clear voice dictionary to release memory
+            if hasattr(model, 'voices'):
+                model.voices.clear()
+            # Delete model reference
+            del model
+            model = None
+            
+        # Clear CUDA cache if available
+        if torch.cuda.is_available():
+            print("Clearing CUDA cache...")
+            torch.cuda.empty_cache()
+            
+        # Restore original functions
+        from models import _cleanup_monkey_patches
+        _cleanup_monkey_patches()
+        
+        print("Cleanup completed")
+        
+    except Exception as e:
+        print(f"Error during cleanup: {e}")
+        import traceback
+        traceback.print_exc()
+
+# Register cleanup for normal exit
+import atexit
+atexit.register(cleanup_resources)
+
+# Register cleanup for signals
+import signal
+import sys
+
+def signal_handler(signum, frame):
+    print(f"\nReceived signal {signum}, shutting down...")
+    cleanup_resources()
+    sys.exit(0)
+
+# Register for common signals
+for sig in [signal.SIGINT, signal.SIGTERM]:
+    try:
+        signal.signal(sig, signal_handler)
+    except (ValueError, AttributeError):
+        # Some signals might not be available on all platforms
+        pass
+
 if __name__ == "__main__":
-    create_interface()
+    try:
+        create_interface()
+    finally:
+        # Ensure cleanup even if Gradio encounters an error
+        cleanup_resources()
