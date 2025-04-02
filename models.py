@@ -35,7 +35,7 @@ def _cleanup_monkey_patches():
             print("Restored original json.load function")
     except Exception as e:
         print(f"Warning: Error restoring json.load: {e}")
-        
+
     try:
         if _patches_applied['load_voice']:
             restore_original_load_voice()
@@ -51,7 +51,7 @@ atexit.register(_cleanup_monkey_patches)
 for sig in [signal.SIGINT, signal.SIGTERM]:
     try:
         signal.signal(sig, lambda signum, frame: (
-            print(f"\nReceived signal {signum}, cleaning up..."), 
+            print(f"\nReceived signal {signum}, cleaning up..."),
             _cleanup_monkey_patches(),
             sys.exit(1)
         ))
@@ -74,15 +74,14 @@ VOICE_FILES = [
     # British Male voices
     "bm_daniel.pt", "bm_fable.pt", "bm_george.pt", "bm_lewis.pt",
     # Special voices
-    "el_dora.pt", "em_alex.pt", "em_santa.pt",
+    "em_alex.pt", "em_santa.pt",
     "ff_siwis.pt",
     "hf_alpha.pt", "hf_beta.pt",
     "hm_omega.pt", "hm_psi.pt",
-    "jf_sara.pt", "jm_nicola.pt",
-    "jf_alpha.pt", "jf_gongtsuene.pt", "jf_nezumi.pt", "jf_tebukuro.pt",
+    "jf_alpha.pt", "jf_nezumi.pt", "jf_tebukuro.pt",
     "jm_kumo.pt",
     "pf_dora.pt", "pm_alex.pt", "pm_santa.pt",
-    "zf_xiaobei.pt", "zf_xiaoni.pt", "zf_xiaoqiao.pt", "zf_xiaoyi.pt"
+    "zf_xiaobei.pt", "zf_xiaoni.pt", "zf_xiaoyi.pt"
 ]
 
 # Patch KPipeline's load_voice method to use weights_only=False
@@ -123,7 +122,7 @@ def patch_json_load():
     global _patches_applied, _original_json_load
     original_load = json.load
     _original_json_load = original_load  # Store for restoration
-    
+
     def custom_load(fp, *args, **kwargs):
         try:
             # Try reading with UTF-8 encoding
@@ -147,7 +146,7 @@ def patch_json_load():
             except json.JSONDecodeError as e:
                 print(f"JSON parsing error: {e}")
                 raise
-    
+
     json.load = custom_load
     _patches_applied['json_load'] = True
     return original_load  # Return original for restoration
@@ -179,16 +178,16 @@ try:
     from phonemizer.backend.espeak.wrapper import EspeakWrapper
     from phonemizer import phonemize
     import espeakng_loader
-    
+
     # Make library available first
     library_path = espeakng_loader.get_library_path()
     data_path = espeakng_loader.get_data_path()
     espeakng_loader.make_library_available()
-    
+
     # Set up espeak-ng paths
     EspeakWrapper.library_path = library_path
     EspeakWrapper.data_path = data_path
-    
+
     # Verify espeak-ng is working
     try:
         test_phonemes = phonemize('test', language='en-us')
@@ -216,33 +215,33 @@ _pipeline_lock = threading.RLock()  # Reentrant lock for thread safety
 
 def download_voice_files(voice_files=None, repo_version="main", required_count=1):
     """Download voice files from Hugging Face.
-    
+
     Args:
         voice_files: Optional list of voice files to download. If None, download all VOICE_FILES.
         repo_version: Version/tag of the repository to use (default: "main")
         required_count: Minimum number of voices required (default: 1)
-        
+
     Returns:
         List of successfully downloaded voice files
-        
+
     Raises:
         ValueError: If fewer than required_count voices could be downloaded
     """
     # Use absolute path for voices directory
     voices_dir = Path(os.path.abspath("voices"))
     voices_dir.mkdir(exist_ok=True)
-    
+
     # Import here to avoid startup dependency
     from huggingface_hub import hf_hub_download
     downloaded_voices = []
     failed_voices = []
-    
+
     # If specific voice files are requested, use those. Otherwise use all.
     files_to_download = voice_files if voice_files is not None else VOICE_FILES
     total_files = len(files_to_download)
-    
+
     print(f"\nDownloading voice files... ({total_files} total files)")
-    
+
     # Check for existing voice files first
     existing_files = []
     for voice_file in files_to_download:
@@ -251,13 +250,13 @@ def download_voice_files(voice_files=None, repo_version="main", required_count=1
             print(f"Voice file {voice_file} already exists")
             downloaded_voices.append(voice_file)
             existing_files.append(voice_file)
-    
+
     # Remove existing files from the download list
     files_to_download = [f for f in files_to_download if f not in existing_files]
     if not files_to_download and downloaded_voices:
         print(f"All required voice files already exist ({len(downloaded_voices)} files)")
         return downloaded_voices
-        
+
     # Proceed with downloading missing files
     retry_count = 3
     try:
@@ -266,7 +265,7 @@ def download_voice_files(voice_files=None, repo_version="main", required_count=1
             for voice_file in files_to_download:
                 # Full path where the voice file should be
                 voice_path = voices_dir / voice_file
-                
+
                 # Try with retries
                 for attempt in range(retry_count):
                     try:
@@ -279,11 +278,11 @@ def download_voice_files(voice_files=None, repo_version="main", required_count=1
                             force_download=True,
                             revision=repo_version
                         )
-                        
+
                         # Move the file to the correct location
                         os.makedirs(os.path.dirname(str(voice_path)), exist_ok=True)
                         shutil.copy2(temp_path, str(voice_path))  # Use copy2 instead of move
-                        
+
                         # Verify file integrity
                         if os.path.getsize(str(voice_path)) > 0:
                             downloaded_voices.append(voice_file)
@@ -303,11 +302,11 @@ def download_voice_files(voice_files=None, repo_version="main", required_count=1
         print(f"Error during voice download process: {e}")
         import traceback
         traceback.print_exc()
-    
+
     # Report results
     if failed_voices:
         print(f"Warning: Failed to download {len(failed_voices)} voice files: {', '.join(failed_voices)}")
-    
+
     if not downloaded_voices:
         error_msg = "No voice files could be downloaded. Please check your internet connection."
         print(f"Error: {error_msg}")
@@ -318,36 +317,36 @@ def download_voice_files(voice_files=None, repo_version="main", required_count=1
         raise ValueError(error_msg)
     else:
         print(f"Successfully processed {len(downloaded_voices)} voice files")
-    
+
     return downloaded_voices
 
 def build_model(model_path: str, device: str, repo_version: str = "main") -> KPipeline:
     """Build and return the Kokoro pipeline with proper encoding configuration
-    
+
     Args:
         model_path: Path to the model file or None to use default
         device: Device to use ('cuda' or 'cpu')
         repo_version: Version/tag of the repository to use (default: "main")
-        
+
     Returns:
         Initialized KPipeline instance
     """
     global _pipeline, _pipeline_lock
-    
+
     # Use a lock for thread safety
     with _pipeline_lock:
         # Double-check pattern to avoid race conditions
         if _pipeline is not None:
             return _pipeline
-            
+
         try:
             # Patch json loading before initializing pipeline
             patch_json_load()
-            
+
             # Download model if it doesn't exist
             if model_path is None:
                 model_path = 'kokoro-v1_0.pth'
-            
+
             model_path = os.path.abspath(model_path)
             if not os.path.exists(model_path):
                 print(f"Downloading model file {model_path}...")
@@ -364,7 +363,7 @@ def build_model(model_path: str, device: str, repo_version: str = "main") -> KPi
                 except Exception as e:
                     print(f"Error downloading model: {e}")
                     raise ValueError(f"Could not download model: {e}") from e
-            
+
             # Download config if it doesn't exist
             config_path = os.path.abspath("config.json")
             if not os.path.exists(config_path):
@@ -381,32 +380,32 @@ def build_model(model_path: str, device: str, repo_version: str = "main") -> KPi
                 except Exception as e:
                     print(f"Error downloading config: {e}")
                     raise ValueError(f"Could not download config: {e}") from e
-            
+
             # Download voice files - require at least one voice
             try:
                 downloaded_voices = download_voice_files(repo_version=repo_version, required_count=1)
             except ValueError as e:
                 print(f"Error: Voice files download failed: {e}")
                 raise ValueError("Voice files download failed") from e
-            
+
             # Validate language code
             lang_code = 'a'  # 'a' for American English
             if lang_code not in ['a', 'b']:  # Simple validation of supported codes
                 print(f"Warning: Unsupported language code '{lang_code}'. Using 'a' (American English).")
                 lang_code = 'a'
-                
+
             # Initialize pipeline with validated language code
             pipeline_instance = KPipeline(lang_code=lang_code)
             if pipeline_instance is None:
                 raise ValueError("Failed to initialize KPipeline - pipeline is None")
-                
+
             # Store device parameter for reference in other operations
             pipeline_instance.device = device
-            
+
             # Initialize voices dictionary if it doesn't exist
             if not hasattr(pipeline_instance, 'voices'):
                 pipeline_instance.voices = {}
-            
+
             # Try to load the first available voice with improved error handling
             voice_loaded = False
             for voice_file in downloaded_voices:
@@ -420,50 +419,50 @@ def build_model(model_path: str, device: str, repo_version: str = "main") -> KPi
                     except Exception as e:
                         print(f"Warning: Failed to load voice {voice_file}: {e}")
                         continue
-            
+
             if not voice_loaded:
                 print("Warning: Could not load any voice models")
-            
+
             # Set the global _pipeline only after successful initialization
             _pipeline = pipeline_instance
-            
+
         except Exception as e:
             print(f"Error initializing pipeline: {e}")
             # Restore original json.load on error
             restore_json_load()
             raise
-            
+
         return _pipeline
 
 def list_available_voices() -> List[str]:
     """List all available voice models"""
     # Always use absolute path for consistency
     voices_dir = Path(os.path.abspath("voices"))
-    
+
     # Create voices directory if it doesn't exist
     if not voices_dir.exists():
         print(f"Creating voices directory at {voices_dir}")
         voices_dir.mkdir(exist_ok=True)
         return []
-    
+
     # Get all .pt files in the voices directory
     voice_files = list(voices_dir.glob("*.pt"))
-    
+
     # If we found voice files, return them
     if voice_files:
         return [f.stem for f in voice_files]
-        
+
     # If no voice files in standard location, check if we need to do a one-time migration
     # This is legacy support for older installations
     alt_voices_path = Path(".") / "voices"
     if alt_voices_path.exists() and alt_voices_path.is_dir() and alt_voices_path != voices_dir:
         print(f"Checking alternative voice location: {alt_voices_path.absolute()}")
         alt_voice_files = list(alt_voices_path.glob("*.pt"))
-        
+
         if alt_voice_files:
             print(f"Found {len(alt_voice_files)} voice files in alternate location")
             print("Moving files to the standard voices directory...")
-            
+
             # Process files in a batch for efficiency
             files_moved = 0
             for voice_file in alt_voice_files:
@@ -475,42 +474,42 @@ def list_available_voices() -> List[str]:
                         files_moved += 1
                     except (OSError, IOError) as e:
                         print(f"Error copying {voice_file.name}: {e}")
-            
+
             if files_moved > 0:
                 print(f"Successfully moved {files_moved} voice files")
                 return [f.stem for f in voices_dir.glob("*.pt")]
-    
+
     print("No voice files found. Please run the application again to download voices.")
     return []
 
 def load_voice(voice_name: str, device: str) -> torch.Tensor:
     """Load a voice model in a thread-safe manner
-    
+
     Args:
         voice_name: Name of the voice to load (with or without .pt extension)
         device: Device to use ('cuda' or 'cpu')
-        
+
     Returns:
         Loaded voice model tensor
-        
+
     Raises:
         ValueError: If voice file not found or loading fails
     """
     pipeline = build_model(None, device)
-    
+
     # Format voice path correctly - strip .pt if it was included
     voice_name = voice_name.replace('.pt', '')
     voice_path = os.path.abspath(os.path.join("voices", f"{voice_name}.pt"))
-    
+
     if not os.path.exists(voice_path):
         raise ValueError(f"Voice file not found: {voice_path}")
-        
+
     # Use a lock to ensure thread safety when loading voices
     with _pipeline_lock:
         # Check if voice is already loaded
         if hasattr(pipeline, 'voices') and voice_name in pipeline.voices:
             return pipeline.voices[voice_name]
-            
+
         # Load voice if not already loaded
         return pipeline.load_voice(voice_path)
 
@@ -523,7 +522,7 @@ def generate_speech(
     speed: float = 1.0
 ) -> Tuple[Optional[torch.Tensor], Optional[str]]:
     """Generate speech using the Kokoro pipeline in a thread-safe manner
-    
+
     Args:
         model: KPipeline instance
         text: Text to synthesize
@@ -531,34 +530,34 @@ def generate_speech(
         lang: Language code ('a' for American English, 'b' for British English)
         device: Device to use ('cuda' or 'cpu')
         speed: Speech speed multiplier (default: 1.0)
-        
+
     Returns:
         Tuple of (audio tensor, phonemes string) or (None, None) on error
     """
     global _pipeline_lock
-    
+
     try:
         if model is None:
             raise ValueError("Model is None - pipeline not properly initialized")
-        
+
         # Format voice name and path
         voice_name = voice.replace('.pt', '')
         voice_path = os.path.abspath(os.path.join("voices", f"{voice_name}.pt"))
-        
+
         # Check if voice file exists
         if not os.path.exists(voice_path):
             raise ValueError(f"Voice file not found: {voice_path}")
-        
+
         # Thread-safe initialization of model properties and voice loading
         with _pipeline_lock:
             # Initialize voices dictionary if it doesn't exist
             if not hasattr(model, 'voices'):
                 model.voices = {}
-                
+
             # Ensure device is set
             if not hasattr(model, 'device'):
                 model.device = device
-                
+
             # Ensure voice is loaded before generating
             if voice_name not in model.voices:
                 print(f"Loading voice {voice_name}...")
@@ -568,23 +567,23 @@ def generate_speech(
                         raise ValueError("Voice load succeeded but voice not in model.voices dictionary")
                 except Exception as e:
                     raise ValueError(f"Failed to load voice {voice_name}: {e}")
-        
+
         # Generate speech (outside the lock for better concurrency)
         print(f"Generating speech with device: {model.device}")
         generator = model(
-            text, 
+            text,
             voice=voice_path,
             speed=speed,
             split_pattern=r'\n+'
         )
-        
+
         # Get first generated segment and convert numpy array to tensor if needed
         for gs, ps, audio in generator:
             if audio is not None:
                 if isinstance(audio, np.ndarray):
                     audio = torch.from_numpy(audio).float()
                 return audio, ps
-            
+
         return None, None
     except (ValueError, FileNotFoundError, RuntimeError, KeyError, AttributeError, TypeError) as e:
         print(f"Error generating speech: {e}")
