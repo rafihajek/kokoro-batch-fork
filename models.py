@@ -62,26 +62,27 @@ for sig in [signal.SIGINT, signal.SIGTERM]:
 # List of available voice files
 VOICE_FILES = [
     # American Female voices
-    "af_alloy.pt", "af_aoede.pt", "af_bella.pt", "af_jessica.pt",
-    "af_kore.pt", "af_nicole.pt", "af_nova.pt", "af_river.pt",
-    "af_sarah.pt", "af_sky.pt",
+    "af_heart.pt", "af_alloy.pt", "af_aoede.pt", "af_bella.pt", "af_jessica.pt", "af_kore.pt", "af_nicole.pt", "af_nova.pt", "af_river.pt", "af_sarah.pt", "af_sky.pt",
     # American Male voices
-    "am_adam.pt", "am_echo.pt", "am_eric.pt", "am_fenrir.pt",
-    "am_liam.pt", "am_michael.pt", "am_onyx.pt", "am_puck.pt",
-    "am_santa.pt",
+    "am_adam.pt", "am_echo.pt", "am_eric.pt", "am_fenrir.pt", "am_liam.pt", "am_michael.pt", "am_onyx.pt", "am_puck.pt", "am_santa.pt",
     # British Female voices
     "bf_alice.pt", "bf_emma.pt", "bf_isabella.pt", "bf_lily.pt",
     # British Male voices
     "bm_daniel.pt", "bm_fable.pt", "bm_george.pt", "bm_lewis.pt",
-    # Special voices
-    "em_alex.pt", "em_santa.pt",
+    # Japanese voices
+    "jf_alpha.pt", "jf_gongitsune.pt", "jf_nezumi.pt", "jf_tebukuro.pt", "jm_kumo.pt",
+    # Mandarin Chinese voices
+    "zf_xiaobei.pt", "zf_xiaoni.pt", "zf_xiaoxiao.pt", "zf_xiaoyi.pt", "zm_yunjian.pt", "zm_yunxi.pt", "zm_yunxia.pt", "zm_yunyang.pt",
+    # Spanish voices
+    "ef_dora.pt", "em_alex.pt", "em_santa.pt",
+    # French voices
     "ff_siwis.pt",
-    "hf_alpha.pt", "hf_beta.pt",
-    "hm_omega.pt", "hm_psi.pt",
-    "jf_alpha.pt", "jf_nezumi.pt", "jf_tebukuro.pt",
-    "jm_kumo.pt",
-    "pf_dora.pt", "pm_alex.pt", "pm_santa.pt",
-    "zf_xiaobei.pt", "zf_xiaoni.pt", "zf_xiaoyi.pt"
+    # Hindi voices
+    "hf_alpha.pt", "hf_beta.pt", "hm_omega.pt", "hm_psi.pt",
+    # Italian voices
+    "if_sara.pt", "im_nicola.pt",
+    # Brazilian Portuguese voices
+    "pf_dora.pt", "pm_alex.pt", "pm_santa.pt"
 ]
 
 # Patch KPipeline's load_voice method to use weights_only=False
@@ -450,7 +451,7 @@ def list_available_voices() -> List[str]:
 
     # If we found voice files, return them
     if voice_files:
-        return [f.stem for f in voice_files]
+        return [f.stem for f in sorted(voice_files, key=lambda f: f.stem.lower())]
 
     # If no voice files in standard location, check if we need to do a one-time migration
     # This is legacy support for older installations
@@ -477,7 +478,7 @@ def list_available_voices() -> List[str]:
 
             if files_moved > 0:
                 print(f"Successfully moved {files_moved} voice files")
-                return [f.stem for f in voices_dir.glob("*.pt")]
+                return [f.stem for f in sorted(voices_dir.glob("*.pt"), key=lambda f: f.stem.lower())]
 
     print("No voice files found. Please run the application again to download voices.")
     return []
