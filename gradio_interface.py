@@ -34,6 +34,7 @@ from models import (
     list_available_voices, build_model,
     generate_speech, download_voice_files
 )
+from kokoro import KPipeline
 
 # Define path type for consistent handling
 PathLike = Union[str, Path]
@@ -56,6 +57,19 @@ SAMPLE_RATE = validate_sample_rate(24000)  # Validated sample rate
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model = None
 
+LANG_MAP = {
+    "af_": "a", "am_": "a",
+    "bf_": "b", "bm_": "b",
+    "jf_": "j", "jm_": "j",
+    "zf_": "z", "zm_": "z",
+    "ef_": "e", "em_": "e",
+    "ff_": "f",
+    "hf_": "h", "hm_": "h",
+    "if_": "i", "im_": "i",
+    "pf_": "p", "pm_": "p",
+}
+pipelines = {}
+
 def get_available_voices():
     """Get list of available voice models."""
     try:
@@ -76,6 +90,17 @@ def get_available_voices():
     except Exception as e:
         print(f"Error getting voices: {e}")
         return []
+    
+def get_pipeline_for_voice(voice_name: str) -> KPipeline:
+    """
+    Determine the language code from the voice prefix and return the associated pipeline.
+    """
+    prefix = voice_name[:3].lower()
+    lang_code = LANG_MAP.get(prefix, "a")
+    if lang_code not in pipelines:
+        print(f"[INFO] Creating pipeline for lang_code='{lang_code}'")
+        pipelines[lang_code] = KPipeline(lang_code=lang_code, model=True)
+    return pipelines[lang_code]
 
 def convert_audio(input_path: PathLike, output_path: PathLike, format: str) -> Optional[PathLike]:
     """Convert audio to specified format.
@@ -177,7 +202,11 @@ def generate_tts_with_logs(voice_name: str, text: str, format: str) -> Optional[
             raise FileNotFoundError(f"Voice file not found: {voice_path}")
             
         try:
-            generator = model(text, voice=voice_path, speed=1.0, split_pattern=r'\n+')
+            if voice_name.startswith(tuple(LANG_MAP.keys())):
+                pipeline = get_pipeline_for_voice(voice_name)
+                generator = pipeline(text, voice=voice_path, speed=1.0, split_pattern=r'\n+')
+            else:
+                generator = model(text, voice=voice_path, speed=1.0, split_pattern=r'\n+')
             
             all_audio = []
             max_segments = 100  # Safety limit for very long texts
