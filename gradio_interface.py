@@ -29,12 +29,13 @@ import soundfile as sf
 from pydub import AudioSegment
 import torch
 import numpy as np
-from typing import Union, List, Optional, Tuple
+from typing import Union, List, Optional, Tuple, Dict, Any
 from models import (
     list_available_voices, build_model,
     generate_speech, download_voice_files
 )
 from kokoro import KPipeline
+import speed_dial
 
 # Define path type for consistent handling
 PathLike = Union[str, Path]
@@ -78,19 +79,19 @@ def get_available_voices():
         if model is None:
             print("Initializing model and downloading voices...")
             model = build_model(None, device)
-        
+
         voices = list_available_voices()
         if not voices:
             print("No voices found after initialization. Attempting to download...")
             download_voice_files()  # Try downloading again
             voices = list_available_voices()
-            
+
         print("Available voices:", voices)
         return voices
     except Exception as e:
         print(f"Error getting voices: {e}")
         return []
-    
+
 def get_pipeline_for_voice(voice_name: str) -> KPipeline:
     """
     Determine the language code from the voice prefix and return the associated pipeline.
@@ -104,12 +105,12 @@ def get_pipeline_for_voice(voice_name: str) -> KPipeline:
 
 def convert_audio(input_path: PathLike, output_path: PathLike, format: str) -> Optional[PathLike]:
     """Convert audio to specified format.
-    
+
     Args:
         input_path: Path to input audio file
         output_path: Path to output audio file
         format: Output format ('wav', 'mp3', or 'aac')
-        
+
     Returns:
         Path to output file or None on error
     """
@@ -117,21 +118,21 @@ def convert_audio(input_path: PathLike, output_path: PathLike, format: str) -> O
         # Normalize paths
         input_path = Path(input_path).absolute()
         output_path = Path(output_path).absolute()
-        
+
         # Validate input file
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {input_path}")
-            
+
         # For WAV format, just return the input path
         if format.lower() == "wav":
             return input_path
-            
+
         # Create output directory if it doesn't exist
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Convert format
         audio = AudioSegment.from_wav(str(input_path))
-        
+
         # Select proper format and options
         if format.lower() == "mp3":
             audio.export(str(output_path), format="mp3", bitrate="192k")
@@ -139,13 +140,13 @@ def convert_audio(input_path: PathLike, output_path: PathLike, format: str) -> O
             audio.export(str(output_path), format="aac", bitrate="192k")
         else:
             raise ValueError(f"Unsupported format: {format}")
-            
+
         # Verify file was created
         if not output_path.exists() or output_path.stat().st_size == 0:
             raise IOError(f"Failed to create {format} file")
-            
+
         return output_path
-        
+
     except (IOError, FileNotFoundError, ValueError) as e:
         print(f"Error converting audio: {type(e).__name__}: {e}")
         return None
@@ -155,69 +156,69 @@ def convert_audio(input_path: PathLike, output_path: PathLike, format: str) -> O
         traceback.print_exc()
         return None
 
-def generate_tts_with_logs(voice_name: str, text: str, format: str) -> Optional[PathLike]:
+def generate_tts_with_logs(voice_name: str, text: str, format: str, speed: float = 1.0) -> Optional[PathLike]:
     """Generate TTS audio with progress logging.
-    
+
     Args:
         voice_name: Name of the voice to use
         text: Text to convert to speech
         format: Output format ('wav', 'mp3', 'aac')
-        
+
     Returns:
         Path to generated audio file or None on error
     """
     global model
-    
+
     try:
         # Initialize model if needed
         if model is None:
             print("Initializing model...")
             model = build_model(None, device)
-        
+
         # Create output directory
         DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        
+
         # Validate input text
         if not text or not text.strip():
             raise ValueError("Text input cannot be empty")
-            
+
         # Limit extremely long texts to prevent memory issues
         MAX_CHARS = 5000
         if len(text) > MAX_CHARS:
             print(f"Warning: Text exceeds {MAX_CHARS} characters. Truncating to prevent memory issues.")
             text = text[:MAX_CHARS] + "..."
-        
+
         # Generate base filename from text
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_name = f"tts_{timestamp}"
         wav_path = DEFAULT_OUTPUT_DIR / f"{base_name}.wav"
-        
+
         # Generate speech
         print(f"\nGenerating speech for: '{text}'")
         print(f"Using voice: {voice_name}")
-        
+
         # Validate voice path using Path for consistent handling
         voice_path = Path("voices").absolute() / f"{voice_name}.pt"
         if not voice_path.exists():
             raise FileNotFoundError(f"Voice file not found: {voice_path}")
-            
+
         try:
             if voice_name.startswith(tuple(LANG_MAP.keys())):
                 pipeline = get_pipeline_for_voice(voice_name)
-                generator = pipeline(text, voice=voice_path, speed=1.0, split_pattern=r'\n+')
+                generator = pipeline(text, voice=voice_path, speed=speed, split_pattern=r'\n+')
             else:
-                generator = model(text, voice=voice_path, speed=1.0, split_pattern=r'\n+')
-            
+                generator = model(text, voice=voice_path, speed=speed, split_pattern=r'\n+')
+
             all_audio = []
             max_segments = 100  # Safety limit for very long texts
             segment_count = 0
-            
+
             for gs, ps, audio in generator:
                 segment_count += 1
                 if segment_count > max_segments:
                     print(f"Warning: Reached maximum segment limit ({max_segments})")
                     break
-                    
+
                 if audio is not None:
                     if isinstance(audio, np.ndarray):
                         audio = torch.from_numpy(audio).float()
@@ -225,16 +226,16 @@ def generate_tts_with_logs(voice_name: str, text: str, format: str) -> Optional[
                     print(f"Generated segment: {gs}")
                     if ps:  # Only print phonemes if available
                         print(f"Phonemes: {ps}")
-            
+
             if not all_audio:
                 raise Exception("No audio generated")
         except Exception as e:
             raise Exception(f"Error in speech generation: {e}")
-            
+
         # Combine audio segments and save
         if not all_audio:
             raise Exception("No audio segments were generated")
-            
+
         # Handle single segment case without concatenation
         if len(all_audio) == 1:
             final_audio = all_audio[0]
@@ -243,20 +244,20 @@ def generate_tts_with_logs(voice_name: str, text: str, format: str) -> Optional[
                 final_audio = torch.cat(all_audio, dim=0)
             except RuntimeError as e:
                 raise Exception(f"Failed to concatenate audio segments: {e}")
-                
+
         # Save audio file
         try:
             sf.write(wav_path, final_audio.numpy(), SAMPLE_RATE)
         except Exception as e:
             raise Exception(f"Failed to save audio file: {e}")
-        
+
         # Convert to requested format if needed
         if format.lower() != "wav":
             output_path = DEFAULT_OUTPUT_DIR / f"{base_name}.{format.lower()}"
             return convert_audio(wav_path, output_path, format.lower())
-        
+
         return wav_path
-        
+
     except Exception as e:
         print(f"Error generating speech: {e}")
         import traceback
@@ -265,19 +266,23 @@ def generate_tts_with_logs(voice_name: str, text: str, format: str) -> Optional[
 
 def create_interface(server_name="0.0.0.0", server_port=7860):
     """Create and launch the Gradio interface."""
-    
+
     # Get available voices
     voices = get_available_voices()
     if not voices:
         print("No voices found! Please check the voices directory.")
         return
-        
+
+    # Get speed dial presets
+    preset_names = speed_dial.get_preset_names()
+
     # Create interface
     with gr.Blocks(title="Kokoro TTS Generator") as interface:
         gr.Markdown("# Kokoro TTS Generator")
-        
+
         with gr.Row():
-            with gr.Column():
+            with gr.Column(scale=2):
+                # Main TTS controls
                 voice = gr.Dropdown(
                     choices=voices,
                     value=voices[0] if voices else None,
@@ -288,22 +293,109 @@ def create_interface(server_name="0.0.0.0", server_port=7860):
                     placeholder="Enter text to convert to speech...",
                     label="Text"
                 )
-                format = gr.Radio(
-                    choices=["wav", "mp3", "aac"],
-                    value="wav",
-                    label="Output Format"
-                )
+                with gr.Row():
+                    format = gr.Radio(
+                        choices=["wav", "mp3", "aac"],
+                        value="wav",
+                        label="Output Format"
+                    )
+                    speed = gr.Slider(
+                        minimum=0.5,
+                        maximum=2.0,
+                        value=1.0,
+                        step=0.1,
+                        label="Speed"
+                    )
                 generate = gr.Button("Generate Speech")
-            
-            with gr.Column():
+
+            with gr.Column(scale=1):
+                # Speed dial section
+                gr.Markdown("## Speed Dial")
+                preset_dropdown = gr.Dropdown(
+                    choices=preset_names,
+                    value=preset_names[0] if preset_names else None,
+                    label="Saved Presets",
+                    interactive=True
+                )
+                preset_name = gr.Textbox(
+                    placeholder="Enter preset name...",
+                    label="New Preset Name"
+                )
+                with gr.Row():
+                    load_preset = gr.Button("Load")
+                    save_preset = gr.Button("Save Current")
+                    delete_preset = gr.Button("Delete")
+
+                # Output section
                 output = gr.Audio(label="Generated Audio")
-                
+
+        # Function to load a preset
+        def load_preset_fn(preset_name):
+            if not preset_name:
+                return None, None, None, None
+
+            preset = speed_dial.get_preset(preset_name)
+            if not preset:
+                return None, None, None, None
+
+            return preset["voice"], preset["text"], preset["format"], preset["speed"]
+
+        # Function to save a preset
+        def save_preset_fn(name, voice, text, format, speed):
+            if not name or not voice or not text:
+                return gr.update(value="Please provide a name, voice, and text")
+
+            success = speed_dial.save_preset(name, voice, text, format, speed)
+
+            # Update the dropdown with the new preset list
+            preset_names = speed_dial.get_preset_names()
+
+            if success:
+                return gr.update(choices=preset_names, value=name)
+            else:
+                return gr.update(choices=preset_names)
+
+        # Function to delete a preset
+        def delete_preset_fn(name):
+            if not name:
+                return gr.update(value="Please select a preset to delete")
+
+            success = speed_dial.delete_preset(name)
+
+            # Update the dropdown with the new preset list
+            preset_names = speed_dial.get_preset_names()
+
+            if success:
+                return gr.update(choices=preset_names, value=None)
+            else:
+                return gr.update(choices=preset_names)
+
+        # Connect the buttons to their functions
+        load_preset.click(
+            fn=load_preset_fn,
+            inputs=preset_dropdown,
+            outputs=[voice, text, format, speed]
+        )
+
+        save_preset.click(
+            fn=save_preset_fn,
+            inputs=[preset_name, voice, text, format, speed],
+            outputs=preset_dropdown
+        )
+
+        delete_preset.click(
+            fn=delete_preset_fn,
+            inputs=preset_dropdown,
+            outputs=preset_dropdown
+        )
+
+        # Connect the generate button
         generate.click(
             fn=generate_tts_with_logs,
-            inputs=[voice, text, format],
+            inputs=[voice, text, format, speed],
             outputs=output
         )
-        
+
     # Launch interface
     interface.launch(
         server_name=server_name,
@@ -314,14 +406,14 @@ def create_interface(server_name="0.0.0.0", server_port=7860):
 def cleanup_resources():
     """Properly clean up resources when the application exits"""
     global model
-    
+
     try:
         print("Cleaning up resources...")
-        
+
         # Clean up model resources
         if model is not None:
             print("Releasing model resources...")
-            
+
             # Clear voice dictionary to release memory
             if hasattr(model, 'voices') and model.voices is not None:
                 try:
@@ -336,7 +428,7 @@ def cleanup_resources():
                     print(f"Cleared {voice_count} voice references")
                 except Exception as ve:
                     print(f"Error clearing voices: {type(ve).__name__}: {ve}")
-            
+
             # Clear model attributes that might hold tensors
             for attr_name in dir(model):
                 if not attr_name.startswith('__') and hasattr(model, attr_name):
@@ -351,7 +443,7 @@ def cleanup_resources():
                             setattr(model, attr_name, None)
                     except:
                         pass
-            
+
             # Delete model reference
             try:
                 del model
@@ -359,28 +451,28 @@ def cleanup_resources():
                 print("Model reference deleted")
             except Exception as me:
                 print(f"Error deleting model: {type(me).__name__}: {me}")
-        
+
         # Clear CUDA memory explicitly
         if torch.cuda.is_available():
             try:
-                # Get initial memory usage 
+                # Get initial memory usage
                 try:
                     initial = torch.cuda.memory_allocated()
                     initial_mb = initial / (1024 * 1024)
                     print(f"CUDA memory before cleanup: {initial_mb:.2f} MB")
                 except:
                     pass
-                
-                # Free memory  
+
+                # Free memory
                 print("Clearing CUDA cache...")
                 torch.cuda.empty_cache()
-                
+
                 # Force synchronization
                 try:
                     torch.cuda.synchronize()
                 except:
                     pass
-                
+
                 # Get final memory usage
                 try:
                     final = torch.cuda.memory_allocated()
@@ -391,7 +483,7 @@ def cleanup_resources():
                     pass
             except Exception as ce:
                 print(f"Error clearing CUDA memory: {type(ce).__name__}: {ce}")
-        
+
         # Restore original functions
         try:
             from models import _cleanup_monkey_patches
@@ -399,7 +491,7 @@ def cleanup_resources():
             print("Monkey patches restored")
         except Exception as pe:
             print(f"Error restoring monkey patches: {type(pe).__name__}: {pe}")
-        
+
         # Final garbage collection
         try:
             import gc
@@ -407,9 +499,9 @@ def cleanup_resources():
             print(f"Garbage collection completed: {collected} objects collected")
         except Exception as gce:
             print(f"Error during garbage collection: {type(gce).__name__}: {gce}")
-            
+
         print("Cleanup completed")
-        
+
     except Exception as e:
         print(f"Error during cleanup: {type(e).__name__}: {e}")
         import traceback
