@@ -39,6 +39,24 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+3. (Optional) For GPU acceleration, install PyTorch with CUDA support:
+```bash
+# For CUDA 11.8
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# For CUDA 12.1
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# For CUDA 12.8 (for RTX 50-series cards)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+```
+
+You can verify CUDA support is enabled with:
+```python
+import torch
+print(torch.cuda.is_available())  # Should print True if CUDA is available
+```
+
 The system will automatically download required models and voice files on first run.
 
 ## Usage
@@ -204,7 +222,22 @@ Common issues and solutions:
 2. **CUDA/GPU Issues**
    - Verify CUDA installation with `nvidia-smi`
    - Update GPU drivers
-   - Check PyTorch CUDA compatibility
+   - Install PyTorch with CUDA support using the appropriate command:
+     ```bash
+     # For CUDA 11.8
+     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+     # For CUDA 12.1
+     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+     # For CUDA 12.8 (for RTX 50-series cards)
+     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+     ```
+   - Verify CUDA is available in PyTorch:
+     ```python
+     import torch
+     print(torch.cuda.is_available())  # Should print True
+     ```
    - Fall back to CPU if needed
 
 3. **Audio Output Issues**
@@ -244,4 +277,4 @@ Feel free to contribute by:
 
 ## License
 
-Apache 2.0 - See LICENSE file for details 
+Apache 2.0 - See LICENSE file for details
