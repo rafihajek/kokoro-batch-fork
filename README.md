@@ -47,6 +47,9 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 # For CUDA 12.1
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
+# For CUDA 12.6
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+
 # For CUDA 12.8 (for RTX 50-series cards)
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 ```
@@ -229,6 +232,9 @@ Common issues and solutions:
 
      # For CUDA 12.1
      pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+     # For CUDA 12.6
+     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 
      # For CUDA 12.8 (for RTX 50-series cards)
      pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
