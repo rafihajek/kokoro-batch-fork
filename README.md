@@ -5,7 +5,7 @@ A local implementation of the Kokoro Text-to-Speech model, featuring dynamic mod
 ## Features
 
 - Local text-to-speech synthesis using the Kokoro-82M model
-- Multiple voice support with easy voice selection (31 voices available)
+- Multiple voice support with easy voice selection (54 voices available across 8 languages)
 - Automatic model and voice downloading from Hugging Face
 - Phoneme output support and visualization
 - Interactive CLI and web interface
@@ -37,6 +37,14 @@ source venv/bin/activate
 2. Install dependencies:
 ```bash
 pip install -r requirements.txt
+```
+
+**Alternative Installation (Simplified):**
+For a simpler setup, you can also install the official Kokoro package directly:
+```bash
+pip install kokoro>=0.9.2 soundfile
+apt-get install espeak-ng  # On Linux
+# or brew install espeak  # On macOS
 ```
 
 3. (Optional) For GPU acceleration, install PyTorch with CUDA support:
@@ -129,55 +137,124 @@ The web interface provides:
 
 ## Available Voices
 
-The system includes 31 different voices across various categories:
+The system includes 54 different voices across 8 languages:
 
-### American English Voices
-- Female (af_*):
-  - af_alloy: Alloy - Clear and professional
-  - af_aoede: Aoede - Smooth and melodic
-  - af_bella: Bella - Warm and friendly
-  - af_jessica: Jessica - Natural and engaging
-  - af_kore: Kore - Bright and energetic
-  - af_nicole: Nicole - Professional and articulate
-  - af_nova: Nova - Modern and dynamic
-  - af_river: River - Soft and flowing
-  - af_sarah: Sarah - Casual and approachable
-  - af_sky: Sky - Light and airy
+### 🇺🇸 American English (20 voices)
+**Language code: 'a'**
 
-- Male (am_*):
-  - am_adam: Adam - Strong and confident
-  - am_echo: Echo - Resonant and clear
-  - am_eric: Eric - Professional and authoritative
-  - am_fenrir: Fenrir - Deep and powerful
-  - am_liam: Liam - Friendly and conversational
-  - am_michael: Michael - Warm and trustworthy
-  - am_onyx: Onyx - Rich and sophisticated
-  - am_puck: Puck - Playful and energetic
+**Female voices (af_*):**
+- af_heart: ❤️ Premium quality voice (Grade A)
+- af_alloy: Clear and professional (Grade C)
+- af_aoede: Smooth and melodic (Grade C+)
+- af_bella: 🔥 Warm and friendly (Grade A-)
+- af_jessica: Natural and engaging (Grade D)
+- af_kore: Bright and energetic (Grade C+)
+- af_nicole: 🎧 Professional and articulate (Grade B-)
+- af_nova: Modern and dynamic (Grade C)
+- af_river: Soft and flowing (Grade D)
+- af_sarah: Casual and approachable (Grade C+)
+- af_sky: Light and airy (Grade C-)
 
-### British English Voices
-- Female (bf_*):
-  - bf_alice: Alice - Refined and elegant
-  - bf_emma: Emma - Warm and professional
-  - bf_isabella: Isabella - Sophisticated and clear
-  - bf_lily: Lily - Sweet and gentle
+**Male voices (am_*):**
+- am_adam: Strong and confident (Grade F+)
+- am_echo: Resonant and clear (Grade D)
+- am_eric: Professional and authoritative (Grade D)
+- am_fenrir: Deep and powerful (Grade C+)
+- am_liam: Friendly and conversational (Grade D)
+- am_michael: Warm and trustworthy (Grade C+)
+- am_onyx: Rich and sophisticated (Grade D)
+- am_puck: Playful and energetic (Grade C+)
+- am_santa: Holiday-themed voice (Grade D-)
 
-- Male (bm_*):
-  - bm_daniel: Daniel - Polished and professional
-  - bm_fable: Fable - Storytelling and engaging
-  - bm_george: George - Classic British accent
-  - bm_lewis: Lewis - Modern British accent
+### 🇬🇧 British English (8 voices)
+**Language code: 'b'**
 
-### Special Voices
-- French Female (ff_*):
-  - ff_siwis: Siwis - French accent
+**Female voices (bf_*):**
+- bf_alice: Refined and elegant (Grade D)
+- bf_emma: Warm and professional (Grade B-)
+- bf_isabella: Sophisticated and clear (Grade C)
+- bf_lily: Sweet and gentle (Grade D)
 
-- High-pitched Voices:
-  - Female (hf_*):
-    - hf_alpha: Alpha - Higher female pitch
-    - hf_beta: Beta - Alternative high female pitch
-  - Male (hm_*):
-    - hm_omega: Omega - Higher male pitch
-    - hm_psi: Psi - Alternative high male pitch
+**Male voices (bm_*):**
+- bm_daniel: Polished and professional (Grade D)
+- bm_fable: Storytelling and engaging (Grade C)
+- bm_george: Classic British accent (Grade C)
+- bm_lewis: Modern British accent (Grade D+)
+
+### 🇯🇵 Japanese (5 voices)
+**Language code: 'j'**
+
+**Female voices (jf_*):**
+- jf_alpha: Standard Japanese female (Grade C+)
+- jf_gongitsune: Based on classic tale (Grade C)
+- jf_nezumi: Mouse bride tale voice (Grade C-)
+- jf_tebukuro: Glove story voice (Grade C)
+
+**Male voices (jm_*):**
+- jm_kumo: Spider thread tale voice (Grade C-)
+
+### 🇨🇳 Mandarin Chinese (8 voices)
+**Language code: 'z'**
+
+**Female voices (zf_*):**
+- zf_xiaobei: Chinese female voice (Grade D)
+- zf_xiaoni: Chinese female voice (Grade D)
+- zf_xiaoxiao: Chinese female voice (Grade D)
+- zf_xiaoyi: Chinese female voice (Grade D)
+
+**Male voices (zm_*):**
+- zm_yunjian: Chinese male voice (Grade D)
+- zm_yunxi: Chinese male voice (Grade D)
+- zm_yunxia: Chinese male voice (Grade D)
+- zm_yunyang: Chinese male voice (Grade D)
+
+### 🇪🇸 Spanish (3 voices)
+**Language code: 'e'**
+
+**Female voices (ef_*):**
+- ef_dora: Spanish female voice
+
+**Male voices (em_*):**
+- em_alex: Spanish male voice
+- em_santa: Spanish holiday voice
+
+### 🇫🇷 French (1 voice)
+**Language code: 'f'**
+
+**Female voices (ff_*):**
+- ff_siwis: French female voice (Grade B-)
+
+### 🇮🇳 Hindi (4 voices)
+**Language code: 'h'**
+
+**Female voices (hf_*):**
+- hf_alpha: Hindi female voice (Grade C)
+- hf_beta: Hindi female voice (Grade C)
+
+**Male voices (hm_*):**
+- hm_omega: Hindi male voice (Grade C)
+- hm_psi: Hindi male voice (Grade C)
+
+### 🇮🇹 Italian (2 voices)
+**Language code: 'i'**
+
+**Female voices (if_*):**
+- if_sara: Italian female voice (Grade C)
+
+**Male voices (im_*):**
+- im_nicola: Italian male voice (Grade C)
+
+### 🇧🇷 Brazilian Portuguese (3 voices)
+**Language code: 'p'**
+
+**Female voices (pf_*):**
+- pf_dora: Portuguese female voice
+
+**Male voices (pm_*):**
+- pm_alex: Portuguese male voice
+- pm_santa: Portuguese holiday voice
+
+**Note:** Quality grades (A to F) indicate the overall quality based on training data quality and duration. Higher grades generally produce better speech quality.
 
 ## Project Structure
 
@@ -208,8 +285,8 @@ The project uses the latest Kokoro model from Hugging Face:
 - Model file: `kokoro-v1_0.pth` (downloaded automatically)
 - Sample rate: 24kHz
 - Voice files: Located in the `voices/` directory (downloaded automatically)
-- Available voices: 31 voices across multiple categories
-- Languages: American English ('a'), British English ('b')
+- Available voices: 54 voices across 8 languages
+- Languages: American English ('a'), British English ('b'), Japanese ('j'), Mandarin Chinese ('z'), Spanish ('e'), French ('f'), Hindi ('h'), Italian ('i'), Brazilian Portuguese ('p')
 - Model size: 82M parameters
 
 ## Troubleshooting

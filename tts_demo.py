@@ -23,9 +23,12 @@ def validate_sample_rate(rate: int) -> int:
 
 def validate_language(lang: str) -> str:
     """Validate language code"""
-    valid_langs = ['a', 'b']  # 'a' for American English, 'b' for British English
+    # Import here to avoid circular imports
+    from models import LANGUAGE_CODES
+    valid_langs = list(LANGUAGE_CODES.keys())
     if lang not in valid_langs:
         print(f"Warning: Invalid language code '{lang}'. Using 'a' (American English).")
+        print(f"Supported language codes: {', '.join(valid_langs)}")
         return 'a'  # Default to American English
     return lang
 

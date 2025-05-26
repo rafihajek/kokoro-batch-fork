@@ -1,13 +1,13 @@
-kokoro  # Official Kokoro TTS library
-misaki  # G2P library for Kokoro
-torch  # PyTorch for model inference (for GPU support, see README.md for CUDA-specific installation)
-soundfile  # Audio file handling
-huggingface-hub  # Model downloads
-gradio  # Web interface
-pydub  # For audio format conversion
-espeakng-loader  # For loading espeak-ng library
-phonemizer-fork  # For phoneme generation
-wheel  # For building packages
-setuptools  # For installing packages
-num2words  # For number to word conversion
-spacy  # For text processing
+kokoro>=0.9.2  # Official Kokoro TTS library (v1.0 model support)
+misaki  # G2P library for Kokoro (multi-language support)
+torch>=2.0.0  # PyTorch for model inference (for GPU support, see README.md for CUDA-specific installation)
+soundfile>=0.12.1  # Audio file handling
+huggingface-hub>=0.16.0  # Model downloads from Hugging Face
+gradio>=4.0.0  # Web interface
+pydub>=0.25.1  # For audio format conversion
+espeakng-loader>=0.1.0  # For loading espeak-ng library
+phonemizer-fork>=3.2.1  # For phoneme generation
+wheel>=0.38.0  # For building packages
+setuptools>=65.0.0  # For installing packages
+num2words>=0.5.12  # For number to word conversion
+spacy>=3.4.0  # For text processing

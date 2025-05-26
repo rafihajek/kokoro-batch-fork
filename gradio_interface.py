@@ -5,7 +5,7 @@ A Gradio interface for the Kokoro-TTS-Local text-to-speech system.
 Supports multiple voices and audio formats, with cross-platform compatibility.
 
 Key Features:
-- Multiple voice models support (26+ voices)
+- Multiple voice models support (54 voices across 8 languages)
 - Real-time generation with progress logging
 - WAV, MP3, and AAC output formats
 - Network sharing capabilities

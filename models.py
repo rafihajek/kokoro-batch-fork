@@ -59,31 +59,57 @@ for sig in [signal.SIGINT, signal.SIGTERM]:
         # Some signals might not be available on all platforms
         pass
 
-# List of available voice files
+# List of available voice files (54 voices across 8 languages)
 VOICE_FILES = [
-    # American Female voices
-    "af_heart.pt", "af_alloy.pt", "af_aoede.pt", "af_bella.pt", "af_jessica.pt", "af_kore.pt", "af_nicole.pt", "af_nova.pt", "af_river.pt", "af_sarah.pt", "af_sky.pt",
-    # American Male voices
-    "am_adam.pt", "am_echo.pt", "am_eric.pt", "am_fenrir.pt", "am_liam.pt", "am_michael.pt", "am_onyx.pt", "am_puck.pt", "am_santa.pt",
-    # British Female voices
+    # American English Female voices (11 voices)
+    "af_heart.pt", "af_alloy.pt", "af_aoede.pt", "af_bella.pt", "af_jessica.pt",
+    "af_kore.pt", "af_nicole.pt", "af_nova.pt", "af_river.pt", "af_sarah.pt", "af_sky.pt",
+
+    # American English Male voices (9 voices)
+    "am_adam.pt", "am_echo.pt", "am_eric.pt", "am_fenrir.pt", "am_liam.pt",
+    "am_michael.pt", "am_onyx.pt", "am_puck.pt", "am_santa.pt",
+
+    # British English Female voices (4 voices)
     "bf_alice.pt", "bf_emma.pt", "bf_isabella.pt", "bf_lily.pt",
-    # British Male voices
+
+    # British English Male voices (4 voices)
     "bm_daniel.pt", "bm_fable.pt", "bm_george.pt", "bm_lewis.pt",
-    # Japanese voices
+
+    # Japanese voices (5 voices)
     "jf_alpha.pt", "jf_gongitsune.pt", "jf_nezumi.pt", "jf_tebukuro.pt", "jm_kumo.pt",
-    # Mandarin Chinese voices
-    "zf_xiaobei.pt", "zf_xiaoni.pt", "zf_xiaoxiao.pt", "zf_xiaoyi.pt", "zm_yunjian.pt", "zm_yunxi.pt", "zm_yunxia.pt", "zm_yunyang.pt",
-    # Spanish voices
+
+    # Mandarin Chinese voices (8 voices)
+    "zf_xiaobei.pt", "zf_xiaoni.pt", "zf_xiaoxiao.pt", "zf_xiaoyi.pt",
+    "zm_yunjian.pt", "zm_yunxi.pt", "zm_yunxia.pt", "zm_yunyang.pt",
+
+    # Spanish voices (3 voices)
     "ef_dora.pt", "em_alex.pt", "em_santa.pt",
-    # French voices
+
+    # French voices (1 voice)
     "ff_siwis.pt",
-    # Hindi voices
+
+    # Hindi voices (4 voices)
     "hf_alpha.pt", "hf_beta.pt", "hm_omega.pt", "hm_psi.pt",
-    # Italian voices
+
+    # Italian voices (2 voices)
     "if_sara.pt", "im_nicola.pt",
-    # Brazilian Portuguese voices
+
+    # Brazilian Portuguese voices (3 voices)
     "pf_dora.pt", "pm_alex.pt", "pm_santa.pt"
 ]
+
+# Language code mapping for different languages
+LANGUAGE_CODES = {
+    'a': 'American English',
+    'b': 'British English',
+    'j': 'Japanese',
+    'z': 'Mandarin Chinese',
+    'e': 'Spanish',
+    'f': 'French',
+    'h': 'Hindi',
+    'i': 'Italian',
+    'p': 'Brazilian Portuguese'
+}
 
 # Patch KPipeline's load_voice method to use weights_only=False
 original_load_voice = KPipeline.load_voice
@@ -390,9 +416,11 @@ def build_model(model_path: str, device: str, repo_version: str = "main") -> KPi
                 raise ValueError("Voice files download failed") from e
 
             # Validate language code
-            lang_code = 'a'  # 'a' for American English
-            if lang_code not in ['a', 'b']:  # Simple validation of supported codes
+            lang_code = 'a'  # Default to 'a' for American English
+            supported_codes = list(LANGUAGE_CODES.keys())
+            if lang_code not in supported_codes:
                 print(f"Warning: Unsupported language code '{lang_code}'. Using 'a' (American English).")
+                print(f"Supported language codes: {', '.join(supported_codes)}")
                 lang_code = 'a'
 
             # Initialize pipeline with validated language code
@@ -482,6 +510,33 @@ def list_available_voices() -> List[str]:
 
     print("No voice files found. Please run the application again to download voices.")
     return []
+
+def get_language_code_from_voice(voice_name: str) -> str:
+    """Get the appropriate language code from a voice name
+
+    Args:
+        voice_name: Name of the voice (e.g., 'af_bella', 'jf_alpha')
+
+    Returns:
+        Language code for the voice
+    """
+    # Extract prefix from voice name
+    prefix = voice_name[:2] if len(voice_name) >= 2 else 'af'
+
+    # Map voice prefixes to language codes
+    prefix_to_lang = {
+        'af': 'a', 'am': 'a',  # American English
+        'bf': 'b', 'bm': 'b',  # British English
+        'jf': 'j', 'jm': 'j',  # Japanese
+        'zf': 'z', 'zm': 'z',  # Mandarin Chinese
+        'ef': 'e', 'em': 'e',  # Spanish
+        'ff': 'f', 'fm': 'f',  # French
+        'hf': 'h', 'hm': 'h',  # Hindi
+        'if': 'i', 'im': 'i',  # Italian
+        'pf': 'p', 'pm': 'p',  # Brazilian Portuguese
+    }
+
+    return prefix_to_lang.get(prefix, 'a')  # Default to American English
 
 def load_voice(voice_name: str, device: str) -> torch.Tensor:
     """Load a voice model in a thread-safe manner
