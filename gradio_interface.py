@@ -37,6 +37,13 @@ from models import (
 from kokoro import KPipeline
 import speed_dial
 
+# Constants
+MAX_TEXT_LENGTH = 5000
+DEFAULT_SAMPLE_RATE = 24000
+MIN_SPEED = 0.1
+MAX_SPEED = 3.0
+DEFAULT_SPEED = 1.0
+
 # Define path type for consistent handling
 PathLike = Union[str, Path]
 
@@ -183,7 +190,7 @@ def generate_tts_with_logs(voice_name: str, text: str, format: str, speed: float
             raise ValueError("Text input cannot be empty")
 
         # Limit extremely long texts to prevent memory issues
-        MAX_CHARS = 5000
+        MAX_CHARS = MAX_TEXT_LENGTH
         if len(text) > MAX_CHARS:
             print(f"Warning: Text exceeds {MAX_CHARS} characters. Truncating to prevent memory issues.")
             text = text[:MAX_CHARS] + "..."
@@ -400,7 +407,7 @@ def create_interface(server_name="0.0.0.0", server_port=7860):
     interface.launch(
         server_name=server_name,
         server_port=server_port,
-        share=True
+        share=False
     )
 
 def cleanup_resources():

@@ -9,6 +9,11 @@ from pathlib import Path
 import numpy as np
 import shutil
 import threading
+import warnings
+
+# Suppress warnings from pre-trained model
+warnings.filterwarnings("ignore", message="dropout option adds dropout after all but last recurrent layer")
+warnings.filterwarnings("ignore", message="`torch.nn.utils.weight_norm` is deprecated")
 
 # Set environment variables for proper encoding
 os.environ["PYTHONIOENCODING"] = "utf-8"
@@ -26,7 +31,7 @@ _patches_applied = {
     'load_voice': False
 }
 
-def _cleanup_monkey_patches():
+def _cleanup_monkey_patches() -> None:
     """Restore original functions that were monkey-patched"""
     try:
         if _patches_applied['json_load'] and _original_json_load is not None:
@@ -55,9 +60,9 @@ for sig in [signal.SIGINT, signal.SIGTERM]:
             _cleanup_monkey_patches(),
             sys.exit(1)
         ))
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError) as e:
         # Some signals might not be available on all platforms
-        pass
+        print(f"Warning: Could not register signal handler: {e}")
 
 # List of available voice files (54 voices across 8 languages)
 VOICE_FILES = [
@@ -114,13 +119,13 @@ LANGUAGE_CODES = {
 # Patch KPipeline's load_voice method to use weights_only=False
 original_load_voice = KPipeline.load_voice
 
-def patched_load_voice(self, voice_path):
+def patched_load_voice(self, voice_path: str) -> torch.Tensor:
     """Load voice model with weights_only=False for compatibility"""
     if not os.path.exists(voice_path):
         raise FileNotFoundError(f"Voice file not found: {voice_path}")
     voice_name = Path(voice_path).stem
     try:
-        voice_model = torch.load(voice_path, weights_only=False)
+        voice_model = torch.load(voice_path, weights_only=True, map_location='cpu')
         if voice_model is None:
             raise ValueError(f"Failed to load voice model from {voice_path}")
         # Ensure device is set
@@ -138,13 +143,13 @@ KPipeline.load_voice = patched_load_voice
 _patches_applied['load_voice'] = True
 
 # Store original function for restoration if needed
-def restore_original_load_voice():
+def restore_original_load_voice() -> None:
     global _patches_applied
     if _patches_applied['load_voice']:
         KPipeline.load_voice = original_load_voice
         _patches_applied['load_voice'] = False
 
-def patch_json_load():
+def patch_json_load() -> None:
     """Patch json.load to handle UTF-8 encoded files with special characters"""
     global _patches_applied, _original_json_load
     original_load = json.load
@@ -181,7 +186,7 @@ def patch_json_load():
 # Store the original load function for potential restoration
 _original_json_load = None
 
-def restore_json_load():
+def restore_json_load() -> None:
     """Restore the original json.load function"""
     global _original_json_load, _patches_applied
     if _original_json_load is not None and _patches_applied['json_load']:
@@ -225,8 +230,11 @@ try:
             print("Note: Phonemization returned empty result")
             print("TTS will work, but phoneme visualization will be disabled")
     except Exception as e:
-        # Continue without espeak functionality
-        print(f"Note: Phonemizer not available: {e}")
+        # Continue without espeak functionality - be more specific about error types
+        if "espeak" in str(e).lower():
+            print(f"Note: eSpeak not found: {e}")
+        else:
+            print(f"Note: Phonemizer initialization error: {e}")
         print("TTS will work, but phoneme visualization will be disabled")
 
 except ImportError as e:
@@ -240,7 +248,7 @@ except ImportError as e:
 _pipeline = None
 _pipeline_lock = threading.RLock()  # Reentrant lock for thread safety
 
-def download_voice_files(voice_files=None, repo_version="main", required_count=1):
+def download_voice_files(voice_files: Optional[List[str]] = None, repo_version: str = "main", required_count: int = 1) -> List[str]:
     """Download voice files from Hugging Face.
 
     Args:

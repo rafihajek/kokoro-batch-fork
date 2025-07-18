@@ -58,6 +58,22 @@ def save_preset(name: str, voice: str, text: str, format: str = "wav", speed: fl
     Returns:
         True if successful, False otherwise
     """
+    import re
+    
+    # Validate preset name
+    if not isinstance(name, str) or len(name.strip()) == 0:
+        print("Preset name must be a non-empty string")
+        return False
+    
+    if len(name) > 50:
+        print("Preset name is too long (max 50 characters)")
+        return False
+    
+    # Only allow safe characters in preset names
+    if not re.match(r'^[a-zA-Z0-9_\- ]+$', name):
+        print("Preset name contains invalid characters")
+        return False
+    
     # Create preset data
     preset = {
         "voice": voice,
@@ -116,7 +132,7 @@ def delete_preset(name: str) -> bool:
 
 def validate_preset(preset: Dict[str, Any]) -> bool:
     """
-    Validate a preset's data structure.
+    Validate a preset's data structure with security checks.
     
     Args:
         preset: Preset data to validate
@@ -124,6 +140,8 @@ def validate_preset(preset: Dict[str, Any]) -> bool:
     Returns:
         True if valid, False otherwise
     """
+    import re
+    
     # Check required fields
     required_fields = ["voice", "text"]
     for field in required_fields:
@@ -131,27 +149,55 @@ def validate_preset(preset: Dict[str, Any]) -> bool:
             print(f"Preset missing required field: {field}")
             return False
     
-    # Check field types
-    if not isinstance(preset.get("voice"), str):
+    # Check field types and validate content
+    voice = preset.get("voice")
+    if not isinstance(voice, str):
         print("Preset voice must be a string")
         return False
     
-    if not isinstance(preset.get("text"), str):
+    # Validate voice name (alphanumeric, underscore, dash only)
+    if not re.match(r'^[a-zA-Z0-9_-]+$', voice):
+        print("Preset voice contains invalid characters")
+        return False
+    
+    text = preset.get("text")
+    if not isinstance(text, str):
         print("Preset text must be a string")
         return False
     
-    # Optional fields with defaults
+    # Validate text length and content
+    if len(text) > 10000:
+        print("Preset text is too long (max 10,000 characters)")
+        return False
+    
+    if len(text.strip()) == 0:
+        print("Preset text cannot be empty")
+        return False
+    
+    # Optional fields with validation
     if "format" not in preset:
         preset["format"] = "wav"
-    elif not isinstance(preset["format"], str):
-        print("Preset format must be a string")
-        return False
+    else:
+        format_val = preset["format"]
+        if not isinstance(format_val, str):
+            print("Preset format must be a string")
+            return False
+        # Only allow safe audio formats
+        if format_val not in ["wav", "mp3", "ogg"]:
+            print("Preset format must be wav, mp3, or ogg")
+            return False
     
     if "speed" not in preset:
         preset["speed"] = 1.0
-    elif not isinstance(preset["speed"], (int, float)):
-        print("Preset speed must be a number")
-        return False
+    else:
+        speed = preset["speed"]
+        if not isinstance(speed, (int, float)):
+            print("Preset speed must be a number")
+            return False
+        # Validate speed range
+        if speed < 0.1 or speed > 3.0:
+            print("Preset speed must be between 0.1 and 3.0")
+            return False
     
     return True
 

@@ -12,6 +12,17 @@ import sys
 # Define path type for consistent handling
 PathLike = Union[str, Path]
 
+# Constants
+MAX_TEXT_LENGTH = 10000
+MAX_GENERATION_TIME = 300  # seconds
+MIN_GENERATION_TIME = 60   # seconds
+DEFAULT_SAMPLE_RATE = 24000
+MIN_SPEED = 0.1
+MAX_SPEED = 3.0
+DEFAULT_SPEED = 1.0
+MAX_RETRIES = 3
+RETRY_DELAY = 2  # seconds
+
 # Constants with validation
 def validate_sample_rate(rate: int) -> int:
     """Validate sample rate is within acceptable range"""
@@ -82,17 +93,17 @@ def get_speed() -> float:
     """Get speech speed from user."""
     while True:
         try:
-            speed = input("\nEnter speech speed (0.5-2.0, default 1.0): ").strip()
+            speed = input(f"\nEnter speech speed ({MIN_SPEED}-{MAX_SPEED}, default {DEFAULT_SPEED}): ").strip()
             if not speed:
-                return 1.0
+                return DEFAULT_SPEED
             speed = float(speed)
-            if 0.5 <= speed <= 2.0:
+            if MIN_SPEED <= speed <= MAX_SPEED:
                 return speed
-            print("Speed must be between 0.5 and 2.0")
+            print(f"Speed must be between {MIN_SPEED} and {MAX_SPEED}")
         except ValueError:
             print("Please enter a valid number.")
 
-def save_audio_with_retry(audio_data: np.ndarray, sample_rate: int, output_path: PathLike, max_retries: int = 3, retry_delay: float = 1.0) -> bool:
+def save_audio_with_retry(audio_data: np.ndarray, sample_rate: int, output_path: PathLike, max_retries: int = MAX_RETRIES, retry_delay: float = RETRY_DELAY) -> bool:
     """
     Attempt to save audio data to file with retry logic.
 
@@ -174,8 +185,8 @@ def save_audio_with_retry(audio_data: np.ndarray, sample_rate: int, output_path:
                 temp_path = output_path.with_name(f"temp_{output_path.name}")
                 if temp_path.exists():
                     temp_path.unlink()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Warning: Could not clean up temporary file {temp_path}: {e}")
 
     return False
 
@@ -223,7 +234,7 @@ def main() -> None:
                 text = get_text_input()
 
                 # Validate text (don't allow extremely long inputs)
-                if len(text) > 10000:  # Reasonable limit for text length
+                if len(text) > MAX_TEXT_LENGTH:
                     print("Text is too long. Please enter a shorter text.")
                     continue
 
@@ -244,8 +255,8 @@ def main() -> None:
                     continue
 
                 # Set a timeout for generation with per-segment timeout
-                max_gen_time = 300  # 5 minutes max total
-                max_segment_time = 60  # 60 seconds max per segment
+                max_gen_time = MAX_GENERATION_TIME
+                max_segment_time = MIN_GENERATION_TIME
                 start_time = time.time()
                 segment_start_time = start_time
 
