@@ -13,6 +13,35 @@ A local implementation of the Kokoro Text-to-Speech model, featuring dynamic mod
 - Cross-platform support (Windows, Linux, macOS)
 - Real-time generation progress display
 - Multiple output formats (WAV, MP3, AAC)
+- Enhanced security and code quality features
+- Centralized configuration management
+- Comprehensive dependency validation
+- Memory management and optimization
+- Thread-safe operations for multi-user scenarios
+
+## Recent Improvements
+
+This project has been significantly enhanced with security and code quality improvements:
+
+### 🔒 Security Enhancements
+- **Fixed critical security vulnerability** in model loading by using `weights_only=True` for `torch.load`
+- **Removed public exposure** of Gradio interface (`share=False`) to prevent accidental public access
+- **Added comprehensive input validation** for all user inputs with regex pattern matching
+- **Enhanced resource management** with proper cleanup and warning systems
+
+### 🛠️ Code Quality Improvements
+- **Replaced hardcoded values** with named constants for better maintainability
+- **Added comprehensive type hints** throughout the codebase for better IDE support and safety
+- **Enhanced thread safety** with proper locking mechanisms for concurrent operations
+- **Improved error handling** with specific error types and consistent messaging
+- **Added proper warning suppression** for model-related deprecation warnings
+
+### 📁 New Components
+- **`config.py`** - Centralized configuration management system
+- **`dependency_checker.py`** - Comprehensive dependency validation and CUDA detection
+- **`IMPROVEMENTS.md`** - Detailed documentation of all enhancements
+
+For complete details, see [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
 
 ## Prerequisites
 
@@ -42,7 +71,7 @@ pip install -r requirements.txt
 **Alternative Installation (Simplified):**
 For a simpler setup, you can also install the official Kokoro package directly:
 ```bash
-pip install kokoro>=0.9.2 soundfile
+pip install kokoro soundfile
 apt-get install espeak-ng  # On Linux
 # or brew install espeak  # On macOS
 ```
@@ -134,6 +163,42 @@ The web interface provides:
 - Audio playback in the browser
 - Multiple output format options (WAV, MP3, AAC)
 - Download options for generated audio
+
+### Dependency Validation
+
+Before running the application, you can validate your system setup:
+
+```bash
+python dependency_checker.py
+```
+
+This will check:
+- Python version compatibility
+- All required dependencies and their versions
+- CUDA availability and GPU detection
+- System memory and disk space
+- Audio system functionality
+
+### Configuration Management
+
+The system now includes centralized configuration management:
+
+```python
+from config import config
+
+# Get configuration values
+sample_rate = config.get("audio.sample_rate")
+max_text_length = config.get("limits.max_text_length")
+
+# Set configuration values
+config.set("audio.sample_rate", 48000)
+config.set("interface.auto_play", True)
+
+# Save configuration
+config.save()
+```
+
+Configuration files are automatically created with sensible defaults.
 
 ## Available Voices
 
@@ -271,11 +336,15 @@ The system includes 54 different voices across 8 languages:
 ├── outputs/               # Generated audio files directory
 ├── LICENSE                # Apache 2.0 License file
 ├── README.md             # Project documentation
+├── IMPROVEMENTS.md       # Detailed improvement documentation
 ├── models.py             # Core TTS model implementation
 ├── gradio_interface.py   # Web interface implementation
-├── config.json           # Model configuration file
-├── requirements.txt      # Python dependencies
-└── tts_demo.py          # CLI implementation
+├── tts_demo.py          # CLI implementation
+├── config.py            # Centralized configuration management
+├── dependency_checker.py # Dependency validation and system checks
+├── speed_dial.py        # Quick preset management system
+├── config.json          # Model configuration file
+└── requirements.txt     # Python dependencies (no version constraints)
 ```
 
 ## Model Information
@@ -292,6 +361,21 @@ The project uses the latest Kokoro model from Hugging Face:
 ## Troubleshooting
 
 Common issues and solutions:
+
+### Quick System Check
+
+First, run the dependency checker to identify potential issues:
+```bash
+python dependency_checker.py
+```
+
+This will automatically detect and report:
+- Missing or incompatible dependencies
+- CUDA/GPU configuration issues
+- System resource problems
+- Audio system issues
+
+### Common Issues
 
 1. **Model Download Issues**
    - Ensure stable internet connection

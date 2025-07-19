@@ -10,6 +10,11 @@ import numpy as np
 import shutil
 import threading
 import warnings
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Suppress warnings from pre-trained model
 warnings.filterwarnings("ignore", message="dropout option adds dropout after all but last recurrent layer")
@@ -20,49 +25,74 @@ os.environ["PYTHONIOENCODING"] = "utf-8"
 # Disable symlinks warning
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
-# Setup for safer monkey-patching
+# Setup for safer cleanup
 import atexit
 import signal
 import sys
 
 # Track whether patches have been applied
 _patches_applied = {
-    'json_load': False,
-    'load_voice': False
+    'json_load': False
 }
 
-def _cleanup_monkey_patches() -> None:
-    """Restore original functions that were monkey-patched"""
+class EnhancedKPipeline(KPipeline):
+    """Enhanced KPipeline with improved voice loading and error handling"""
+    
+    def __init__(self, lang_code: str = 'a', model: bool = True):
+        super().__init__(lang_code=lang_code, model=model)
+        self.device = 'cpu'  # Default device
+        if not hasattr(self, 'voices'):
+            self.voices = {}
+    
+    def load_voice(self, voice_path: str) -> torch.Tensor:
+        """Load voice model with improved error handling and path validation"""
+        voice_path = Path(voice_path).resolve()
+        
+        if not voice_path.exists():
+            raise FileNotFoundError(f"Voice file not found: {voice_path}")
+        
+        voice_name = voice_path.stem
+        
+        try:
+            logger.info(f"Loading voice: {voice_name} from {voice_path}")
+            voice_model = torch.load(str(voice_path), weights_only=True, map_location='cpu')
+            
+            if voice_model is None:
+                raise ValueError(f"Failed to load voice model from {voice_path}")
+            
+            # Move model to device and store in voices dictionary
+            self.voices[voice_name] = voice_model.to(self.device)
+            logger.info(f"Successfully loaded voice: {voice_name}")
+            return self.voices[voice_name]
+            
+        except Exception as e:
+            logger.error(f"Error loading voice {voice_name}: {e}")
+            raise
+
+def _cleanup_patches() -> None:
+    """Restore original functions that were patched"""
     try:
         if _patches_applied['json_load'] and _original_json_load is not None:
             restore_json_load()
             _patches_applied['json_load'] = False
-            print("Restored original json.load function")
+            logger.info("Restored original json.load function")
     except Exception as e:
-        print(f"Warning: Error restoring json.load: {e}")
-
-    try:
-        if _patches_applied['load_voice']:
-            restore_original_load_voice()
-            _patches_applied['load_voice'] = False
-            print("Restored original KPipeline.load_voice function")
-    except Exception as e:
-        print(f"Warning: Error restoring KPipeline.load_voice: {e}")
+        logger.warning(f"Error restoring json.load: {e}")
 
 # Register cleanup for normal exit
-atexit.register(_cleanup_monkey_patches)
+atexit.register(_cleanup_patches)
 
 # Register cleanup for signals
 for sig in [signal.SIGINT, signal.SIGTERM]:
     try:
         signal.signal(sig, lambda signum, frame: (
-            print(f"\nReceived signal {signum}, cleaning up..."),
-            _cleanup_monkey_patches(),
+            logger.info(f"Received signal {signum}, cleaning up..."),
+            _cleanup_patches(),
             sys.exit(1)
         ))
     except (ValueError, AttributeError) as e:
         # Some signals might not be available on all platforms
-        print(f"Warning: Could not register signal handler: {e}")
+        logger.warning(f"Could not register signal handler: {e}")
 
 # List of available voice files (54 voices across 8 languages)
 VOICE_FILES = [
@@ -116,38 +146,6 @@ LANGUAGE_CODES = {
     'p': 'Brazilian Portuguese'
 }
 
-# Patch KPipeline's load_voice method to use weights_only=False
-original_load_voice = KPipeline.load_voice
-
-def patched_load_voice(self, voice_path: str) -> torch.Tensor:
-    """Load voice model with weights_only=False for compatibility"""
-    if not os.path.exists(voice_path):
-        raise FileNotFoundError(f"Voice file not found: {voice_path}")
-    voice_name = Path(voice_path).stem
-    try:
-        voice_model = torch.load(voice_path, weights_only=True, map_location='cpu')
-        if voice_model is None:
-            raise ValueError(f"Failed to load voice model from {voice_path}")
-        # Ensure device is set
-        if not hasattr(self, 'device'):
-            self.device = 'cpu'
-        # Move model to device and store in voices dictionary
-        self.voices[voice_name] = voice_model.to(self.device)
-        return self.voices[voice_name]
-    except Exception as e:
-        print(f"Error loading voice {voice_name}: {e}")
-        raise
-
-# Apply the patch
-KPipeline.load_voice = patched_load_voice
-_patches_applied['load_voice'] = True
-
-# Store original function for restoration if needed
-def restore_original_load_voice() -> None:
-    global _patches_applied
-    if _patches_applied['load_voice']:
-        KPipeline.load_voice = original_load_voice
-        _patches_applied['load_voice'] = False
 
 def patch_json_load() -> None:
     """Patch json.load to handle UTF-8 encoded files with special characters"""
@@ -165,7 +163,7 @@ def patch_json_load() -> None:
             try:
                 return json.loads(content)
             except json.JSONDecodeError as e:
-                print(f"JSON parsing error: {e}")
+                logger.error(f"JSON parsing error: {e}")
                 raise
         except UnicodeDecodeError:
             # If UTF-8 fails, try with utf-8-sig for files with BOM
@@ -176,7 +174,7 @@ def patch_json_load() -> None:
             try:
                 return json.loads(content)
             except json.JSONDecodeError as e:
-                print(f"JSON parsing error: {e}")
+                logger.error(f"JSON parsing error: {e}")
                 raise
 
     json.load = custom_load
@@ -196,12 +194,14 @@ def restore_json_load() -> None:
 
 def load_config(config_path: str) -> dict:
     """Load configuration file with proper encoding handling"""
+    config_path = Path(config_path).resolve()
+    
     try:
-        with codecs.open(config_path, 'r', encoding='utf-8') as f:
+        with codecs.open(str(config_path), 'r', encoding='utf-8') as f:
             return json.load(f)
     except UnicodeDecodeError:
         # Fallback to utf-8-sig if regular utf-8 fails
-        with codecs.open(config_path, 'r', encoding='utf-8-sig') as f:
+        with codecs.open(str(config_path), 'r', encoding='utf-8-sig') as f:
             return json.load(f)
 
 # Initialize espeak-ng
@@ -247,9 +247,11 @@ except ImportError as e:
 # Initialize pipeline globally with thread safety
 _pipeline = None
 _pipeline_lock = threading.RLock()  # Reentrant lock for thread safety
+_voice_cache_lock = threading.RLock()  # Separate lock for voice cache operations
+_download_lock = threading.Lock()  # Lock for download operations
 
 def download_voice_files(voice_files: Optional[List[str]] = None, repo_version: str = "main", required_count: int = 1) -> List[str]:
-    """Download voice files from Hugging Face.
+    """Download voice files from Hugging Face with enhanced progress tracking.
 
     Args:
         voice_files: Optional list of voice files to download. If None, download all VOICE_FILES.
@@ -262,8 +264,13 @@ def download_voice_files(voice_files: Optional[List[str]] = None, repo_version: 
     Raises:
         ValueError: If fewer than required_count voices could be downloaded
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from tqdm import tqdm
+    import hashlib
+    import time
+    
     # Use absolute path for voices directory
-    voices_dir = Path(os.path.abspath("voices"))
+    voices_dir = Path("voices").resolve()
     voices_dir.mkdir(exist_ok=True)
 
     # Import here to avoid startup dependency
@@ -275,88 +282,108 @@ def download_voice_files(voice_files: Optional[List[str]] = None, repo_version: 
     files_to_download = voice_files if voice_files is not None else VOICE_FILES
     total_files = len(files_to_download)
 
-    print(f"\nDownloading voice files... ({total_files} total files)")
+    logger.info(f"Downloading voice files... ({total_files} total files)")
 
     # Check for existing voice files first
     existing_files = []
     for voice_file in files_to_download:
         voice_path = voices_dir / voice_file
-        if voice_path.exists():
-            print(f"Voice file {voice_file} already exists")
+        if voice_path.exists() and voice_path.stat().st_size > 0:
+            logger.info(f"Voice file {voice_file} already exists")
             downloaded_voices.append(voice_file)
             existing_files.append(voice_file)
 
     # Remove existing files from the download list
     files_to_download = [f for f in files_to_download if f not in existing_files]
     if not files_to_download and downloaded_voices:
-        print(f"All required voice files already exist ({len(downloaded_voices)} files)")
+        logger.info(f"All required voice files already exist ({len(downloaded_voices)} files)")
         return downloaded_voices
 
-    # Proceed with downloading missing files
-    retry_count = 3
-    try:
-        import tempfile
-        with tempfile.TemporaryDirectory() as temp_dir:
-            for voice_file in files_to_download:
-                # Full path where the voice file should be
-                voice_path = voices_dir / voice_file
+    def download_single_voice(voice_file: str) -> tuple[str, bool, str]:
+        """Download a single voice file with retry logic"""
+        retry_count = 3
+        retry_delay = 2
+        
+        for attempt in range(retry_count):
+            try:
+                # Download with exponential backoff
+                if attempt > 0:
+                    delay = retry_delay * (2 ** (attempt - 1))
+                    time.sleep(delay)
+                
+                # Download to a temporary location first
+                import tempfile
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pt') as temp_file:
+                    temp_path = hf_hub_download(
+                        repo_id="hexgrad/Kokoro-82M",
+                        filename=f"voices/{voice_file}",
+                        local_dir=temp_file.name + "_dir",
+                        force_download=True,
+                        revision=repo_version
+                    )
+                    
+                    # Verify file integrity with basic size check
+                    if Path(temp_path).stat().st_size == 0:
+                        raise ValueError(f"Downloaded file {voice_file} has zero size")
+                    
+                    # Move to final location
+                    voice_path = voices_dir / voice_file
+                    shutil.move(temp_path, str(voice_path))
+                    
+                    return voice_file, True, f"Successfully downloaded {voice_file}"
+                    
+            except Exception as e:
+                error_msg = f"Failed to download {voice_file} (attempt {attempt+1}/{retry_count}): {e}"
+                if attempt == retry_count - 1:
+                    return voice_file, False, error_msg
+                logger.warning(error_msg)
+        
+        return voice_file, False, f"Failed all {retry_count} attempts to download {voice_file}"
 
-                # Try with retries
-                for attempt in range(retry_count):
-                    try:
-                        print(f"Downloading {voice_file}... (attempt {attempt+1}/{retry_count})")
-                        # Download to a temporary location first
-                        temp_path = hf_hub_download(
-                            repo_id="hexgrad/Kokoro-82M",
-                            filename=f"voices/{voice_file}",
-                            local_dir=temp_dir,
-                            force_download=True,
-                            revision=repo_version
-                        )
-
-                        # Move the file to the correct location
-                        os.makedirs(os.path.dirname(str(voice_path)), exist_ok=True)
-                        shutil.copy2(temp_path, str(voice_path))  # Use copy2 instead of move
-
-                        # Verify file integrity
-                        if os.path.getsize(str(voice_path)) > 0:
-                            downloaded_voices.append(voice_file)
-                            print(f"Successfully downloaded {voice_file}")
-                            break  # Success, exit retry loop
-                        else:
-                            print(f"Warning: Downloaded file {voice_file} has zero size, retrying...")
-                            os.remove(str(voice_path))  # Remove invalid file
-                            if attempt == retry_count - 1:
-                                failed_voices.append(voice_file)
-                    except (IOError, OSError, ValueError, FileNotFoundError, ConnectionError) as e:
-                        print(f"Warning: Failed to download {voice_file} (attempt {attempt+1}): {e}")
-                        if attempt == retry_count - 1:
-                            failed_voices.append(voice_file)
-                            print(f"Error: Failed all {retry_count} attempts to download {voice_file}")
-    except Exception as e:
-        print(f"Error during voice download process: {e}")
-        import traceback
-        traceback.print_exc()
+    # Download files with progress bar and parallel processing
+    if files_to_download:
+        logger.info(f"Downloading {len(files_to_download)} missing voice files...")
+        
+        with ThreadPoolExecutor(max_workers=3) as executor:  # Limit concurrent downloads
+            # Submit all download tasks
+            future_to_voice = {
+                executor.submit(download_single_voice, voice_file): voice_file
+                for voice_file in files_to_download
+            }
+            
+            # Process completed downloads with progress bar
+            with tqdm(total=len(files_to_download), desc="Downloading voices") as pbar:
+                for future in as_completed(future_to_voice):
+                    voice_file, success, message = future.result()
+                    
+                    if success:
+                        downloaded_voices.append(voice_file)
+                        logger.info(message)
+                    else:
+                        failed_voices.append(voice_file)
+                        logger.error(message)
+                    
+                    pbar.update(1)
 
     # Report results
     if failed_voices:
-        print(f"Warning: Failed to download {len(failed_voices)} voice files: {', '.join(failed_voices)}")
+        logger.warning(f"Failed to download {len(failed_voices)} voice files: {', '.join(failed_voices)}")
 
     if not downloaded_voices:
         error_msg = "No voice files could be downloaded. Please check your internet connection."
-        print(f"Error: {error_msg}")
+        logger.error(error_msg)
         raise ValueError(error_msg)
     elif len(downloaded_voices) < required_count:
         error_msg = f"Only {len(downloaded_voices)} voice files could be downloaded, but {required_count} were required."
-        print(f"Error: {error_msg}")
+        logger.error(error_msg)
         raise ValueError(error_msg)
     else:
-        print(f"Successfully processed {len(downloaded_voices)} voice files")
+        logger.info(f"Successfully processed {len(downloaded_voices)} voice files")
 
     return downloaded_voices
 
-def build_model(model_path: str, device: str, repo_version: str = "main") -> KPipeline:
-    """Build and return the Kokoro pipeline with proper encoding configuration
+def build_model(model_path: str, device: str, repo_version: str = "main") -> EnhancedKPipeline:
+    """Build and return the Enhanced Kokoro pipeline with proper encoding configuration
 
     Args:
         model_path: Path to the model file or None to use default
@@ -364,7 +391,7 @@ def build_model(model_path: str, device: str, repo_version: str = "main") -> KPi
         repo_version: Version/tag of the repository to use (default: "main")
 
     Returns:
-        Initialized KPipeline instance
+        Initialized EnhancedKPipeline instance
     """
     global _pipeline, _pipeline_lock
 
@@ -432,16 +459,12 @@ def build_model(model_path: str, device: str, repo_version: str = "main") -> KPi
                 lang_code = 'a'
 
             # Initialize pipeline with validated language code
-            pipeline_instance = KPipeline(lang_code=lang_code)
+            pipeline_instance = EnhancedKPipeline(lang_code=lang_code)
             if pipeline_instance is None:
-                raise ValueError("Failed to initialize KPipeline - pipeline is None")
+                raise ValueError("Failed to initialize EnhancedKPipeline - pipeline is None")
 
             # Store device parameter for reference in other operations
             pipeline_instance.device = device
-
-            # Initialize voices dictionary if it doesn't exist
-            if not hasattr(pipeline_instance, 'voices'):
-                pipeline_instance.voices = {}
 
             # Try to load the first available voice with improved error handling
             voice_loaded = False
@@ -563,22 +586,22 @@ def load_voice(voice_name: str, device: str) -> torch.Tensor:
 
     # Format voice path correctly - strip .pt if it was included
     voice_name = voice_name.replace('.pt', '')
-    voice_path = os.path.abspath(os.path.join("voices", f"{voice_name}.pt"))
+    voice_path = Path("voices").resolve() / f"{voice_name}.pt"
 
-    if not os.path.exists(voice_path):
+    if not voice_path.exists():
         raise ValueError(f"Voice file not found: {voice_path}")
 
     # Use a lock to ensure thread safety when loading voices
     with _pipeline_lock:
         # Check if voice is already loaded
-        if hasattr(pipeline, 'voices') and voice_name in pipeline.voices:
+        if voice_name in pipeline.voices:
             return pipeline.voices[voice_name]
 
         # Load voice if not already loaded
-        return pipeline.load_voice(voice_path)
+        return pipeline.load_voice(str(voice_path))
 
 def generate_speech(
-    model: KPipeline,
+    model: EnhancedKPipeline,
     text: str,
     voice: str,
     lang: str = 'a',
@@ -588,7 +611,7 @@ def generate_speech(
     """Generate speech using the Kokoro pipeline in a thread-safe manner
 
     Args:
-        model: KPipeline instance
+        model: EnhancedKPipeline instance
         text: Text to synthesize
         voice: Voice name (e.g. 'af_bella')
         lang: Language code ('a' for American English, 'b' for British English)
@@ -606,37 +629,32 @@ def generate_speech(
 
         # Format voice name and path
         voice_name = voice.replace('.pt', '')
-        voice_path = os.path.abspath(os.path.join("voices", f"{voice_name}.pt"))
+        voice_path = Path("voices").resolve() / f"{voice_name}.pt"
 
         # Check if voice file exists
-        if not os.path.exists(voice_path):
+        if not voice_path.exists():
             raise ValueError(f"Voice file not found: {voice_path}")
 
         # Thread-safe initialization of model properties and voice loading
         with _pipeline_lock:
-            # Initialize voices dictionary if it doesn't exist
-            if not hasattr(model, 'voices'):
-                model.voices = {}
-
             # Ensure device is set
-            if not hasattr(model, 'device'):
-                model.device = device
+            model.device = device
 
             # Ensure voice is loaded before generating
             if voice_name not in model.voices:
-                print(f"Loading voice {voice_name}...")
+                logger.info(f"Loading voice {voice_name}...")
                 try:
-                    model.load_voice(voice_path)
+                    model.load_voice(str(voice_path))
                     if voice_name not in model.voices:
                         raise ValueError("Voice load succeeded but voice not in model.voices dictionary")
                 except Exception as e:
                     raise ValueError(f"Failed to load voice {voice_name}: {e}")
 
         # Generate speech (outside the lock for better concurrency)
-        print(f"Generating speech with device: {model.device}")
+        logger.info(f"Generating speech with device: {model.device}")
         generator = model(
             text,
-            voice=voice_path,
+            voice=str(voice_path),
             speed=speed,
             split_pattern=r'\n+'
         )
@@ -650,10 +668,10 @@ def generate_speech(
 
         return None, None
     except (ValueError, FileNotFoundError, RuntimeError, KeyError, AttributeError, TypeError) as e:
-        print(f"Error generating speech: {e}")
+        logger.error(f"Error generating speech: {e}")
         return None, None
     except Exception as e:
-        print(f"Unexpected error during speech generation: {e}")
+        logger.error(f"Unexpected error during speech generation: {e}")
         import traceback
         traceback.print_exc()
         return None, None

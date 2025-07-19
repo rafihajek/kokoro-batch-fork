@@ -45,8 +45,8 @@ def validate_language(lang: str) -> str:
 
 # Define and validate constants
 SAMPLE_RATE = validate_sample_rate(24000)
-DEFAULT_MODEL_PATH = Path('kokoro-v1_0.pth').absolute()
-DEFAULT_OUTPUT_FILE = Path('output.wav').absolute()
+DEFAULT_MODEL_PATH = Path('kokoro-v1_0.pth').resolve()
+DEFAULT_OUTPUT_FILE = Path('output.wav').resolve()
 DEFAULT_LANGUAGE = validate_language('a')  # 'a' for American English, 'b' for British English
 DEFAULT_TEXT = "Hello, welcome to this text-to-speech test."
 
@@ -118,7 +118,7 @@ def save_audio_with_retry(audio_data: np.ndarray, sample_rate: int, output_path:
         True if successful, False otherwise
     """
     # Convert and normalize path to Path object
-    output_path = Path(output_path).absolute()
+    output_path = Path(output_path).resolve()
 
     # Create parent directory if it doesn't exist
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -191,7 +191,22 @@ def save_audio_with_retry(audio_data: np.ndarray, sample_rate: int, output_path:
     return False
 
 def main() -> None:
+    import psutil
+    import gc
+    
     try:
+        # Check system memory at startup
+        memory = psutil.virtual_memory()
+        available_gb = memory.available / (1024**3)
+        total_gb = memory.total / (1024**3)
+        
+        print(f"System memory: {available_gb:.1f}GB available / {total_gb:.1f}GB total")
+        
+        if available_gb < 2.0:
+            print("Warning: Low system memory detected. Consider closing other applications.")
+            # Force garbage collection
+            gc.collect()
+
         # Set up device safely
         try:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -233,9 +248,19 @@ def main() -> None:
                 voice = select_voice(voices_cache)
                 text = get_text_input()
 
-                # Validate text (don't allow extremely long inputs)
-                if len(text) > MAX_TEXT_LENGTH:
-                    print("Text is too long. Please enter a shorter text.")
+                # Dynamic text length validation based on available memory
+                memory = psutil.virtual_memory()
+                available_gb = memory.available / (1024**3)
+                
+                # Adjust max length based on available memory
+                dynamic_max_length = MAX_TEXT_LENGTH
+                if available_gb < 2.0:
+                    dynamic_max_length = min(MAX_TEXT_LENGTH, 3000)
+                    print(f"Reduced text limit to {dynamic_max_length} characters due to low memory")
+                
+                if len(text) > dynamic_max_length:
+                    print(f"Text is too long ({len(text)} chars). Maximum allowed: {dynamic_max_length} characters.")
+                    print("Please enter a shorter text.")
                     continue
 
                 speed = get_speed()
@@ -247,7 +272,7 @@ def main() -> None:
                 # Generate speech
                 all_audio = []
                 # Use Path object for consistent path handling
-                voice_path = Path("voices").absolute() / f"{voice}.pt"
+                voice_path = Path("voices").resolve() / f"{voice}.pt"
 
                 # Verify voice file exists
                 if not voice_path.exists():
@@ -351,7 +376,7 @@ def main() -> None:
                                 continue
 
                         # Use consistent Path object
-                        output_path = Path(DEFAULT_OUTPUT_FILE)
+                        output_path = DEFAULT_OUTPUT_FILE
                         if save_audio_with_retry(final_audio.numpy(), SAMPLE_RATE, output_path):
                             print(f"\nAudio saved to {output_path}")
                             # Play a system beep to indicate completion

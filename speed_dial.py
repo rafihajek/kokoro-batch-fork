@@ -183,8 +183,8 @@ def validate_preset(preset: Dict[str, Any]) -> bool:
             print("Preset format must be a string")
             return False
         # Only allow safe audio formats
-        if format_val not in ["wav", "mp3", "ogg"]:
-            print("Preset format must be wav, mp3, or ogg")
+        if format_val not in ["wav", "mp3", "aac"]:
+            print("Preset format must be wav, mp3, or aac")
             return False
     
     if "speed" not in preset:

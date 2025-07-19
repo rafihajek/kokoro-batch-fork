@@ -32,9 +32,8 @@ import numpy as np
 from typing import Union, List, Optional, Tuple, Dict, Any
 from models import (
     list_available_voices, build_model,
-    generate_speech, download_voice_files
+    generate_speech, download_voice_files, EnhancedKPipeline
 )
-from kokoro import KPipeline
 import speed_dial
 
 # Constants
@@ -99,7 +98,7 @@ def get_available_voices():
         print(f"Error getting voices: {e}")
         return []
 
-def get_pipeline_for_voice(voice_name: str) -> KPipeline:
+def get_pipeline_for_voice(voice_name: str) -> EnhancedKPipeline:
     """
     Determine the language code from the voice prefix and return the associated pipeline.
     """
@@ -107,7 +106,7 @@ def get_pipeline_for_voice(voice_name: str) -> KPipeline:
     lang_code = LANG_MAP.get(prefix, "a")
     if lang_code not in pipelines:
         print(f"[INFO] Creating pipeline for lang_code='{lang_code}'")
-        pipelines[lang_code] = KPipeline(lang_code=lang_code, model=True)
+        pipelines[lang_code] = EnhancedKPipeline(lang_code=lang_code, model=True)
     return pipelines[lang_code]
 
 def convert_audio(input_path: PathLike, output_path: PathLike, format: str) -> Optional[PathLike]:
@@ -123,8 +122,8 @@ def convert_audio(input_path: PathLike, output_path: PathLike, format: str) -> O
     """
     try:
         # Normalize paths
-        input_path = Path(input_path).absolute()
-        output_path = Path(output_path).absolute()
+        input_path = Path(input_path).resolve()
+        output_path = Path(output_path).resolve()
 
         # Validate input file
         if not input_path.exists():
@@ -164,7 +163,7 @@ def convert_audio(input_path: PathLike, output_path: PathLike, format: str) -> O
         return None
 
 def generate_tts_with_logs(voice_name: str, text: str, format: str, speed: float = 1.0) -> Optional[PathLike]:
-    """Generate TTS audio with progress logging.
+    """Generate TTS audio with progress logging and memory management.
 
     Args:
         voice_name: Name of the voice to use
@@ -175,8 +174,21 @@ def generate_tts_with_logs(voice_name: str, text: str, format: str, speed: float
         Path to generated audio file or None on error
     """
     global model
+    import psutil
+    import gc
 
     try:
+        # Check available memory before processing
+        memory = psutil.virtual_memory()
+        available_gb = memory.available / (1024**3)
+        
+        if available_gb < 1.0:  # Less than 1GB available
+            print(f"Warning: Low memory available ({available_gb:.1f}GB). Consider closing other applications.")
+            # Force garbage collection
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
         # Initialize model if needed
         if model is None:
             print("Initializing model...")
@@ -189,8 +201,12 @@ def generate_tts_with_logs(voice_name: str, text: str, format: str, speed: float
         if not text or not text.strip():
             raise ValueError("Text input cannot be empty")
 
-        # Limit extremely long texts to prevent memory issues
+        # Dynamic text length limit based on available memory
         MAX_CHARS = MAX_TEXT_LENGTH
+        if available_gb < 2.0:  # Less than 2GB available
+            MAX_CHARS = min(MAX_CHARS, 2000)  # Reduce limit for low memory
+            print(f"Reduced text limit to {MAX_CHARS} characters due to low memory")
+        
         if len(text) > MAX_CHARS:
             print(f"Warning: Text exceeds {MAX_CHARS} characters. Truncating to prevent memory issues.")
             text = text[:MAX_CHARS] + "..."
@@ -205,7 +221,7 @@ def generate_tts_with_logs(voice_name: str, text: str, format: str, speed: float
         print(f"Using voice: {voice_name}")
 
         # Validate voice path using Path for consistent handling
-        voice_path = Path("voices").absolute() / f"{voice_name}.pt"
+        voice_path = Path("voices").resolve() / f"{voice_name}.pt"
         if not voice_path.exists():
             raise FileNotFoundError(f"Voice file not found: {voice_path}")
 
