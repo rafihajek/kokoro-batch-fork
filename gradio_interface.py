@@ -29,6 +29,7 @@ import soundfile as sf
 from pydub import AudioSegment
 import torch
 import numpy as np
+import argparse
 from typing import Union, List, Optional, Tuple, Dict, Any
 from models import (
     list_available_voices, build_model,
@@ -287,7 +288,7 @@ def generate_tts_with_logs(voice_name: str, text: str, format: str, speed: float
         traceback.print_exc()
         return None
 
-def create_interface(server_name="0.0.0.0", server_port=7860):
+def create_interface(server_name="127.0.0.1", server_port=7860):
     """Create and launch the Gradio interface."""
 
     # Get available voices
@@ -551,9 +552,30 @@ for sig in [signal.SIGINT, signal.SIGTERM]:
         # Some signals might not be available on all platforms
         pass
 
+def parse_arguments():
+    """Parse command line arguments for host and port configuration."""
+    parser = argparse.ArgumentParser(
+        description="Kokoro TTS Local Generator - Gradio Web Interface",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Host address to bind the server to"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=7860,
+        help="Port number to run the server on"
+    )
+    return parser.parse_args()
+
 if __name__ == "__main__":
     try:
-        create_interface()
+        args = parse_arguments()
+        create_interface(server_name=args.host, server_port=args.port)
     finally:
         # Ensure cleanup even if Gradio encounters an error
         cleanup_resources()
