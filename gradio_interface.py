@@ -304,52 +304,63 @@ def create_interface(server_name="127.0.0.1", server_port=7860):
     with gr.Blocks(title="Kokoro TTS Generator") as interface:
         gr.Markdown("# Kokoro TTS Generator")
 
-        with gr.Column():
-            # Main TTS controls
-            voice = gr.Dropdown(
-                choices=voices,
-                value=voices[0] if voices else None,
-                label="Voice"
-            )
-            text = gr.Textbox(
-                lines=3,
-                placeholder="Enter text to convert to speech...",
-                label="Text"
-            )
-            with gr.Row():
-                format = gr.Radio(
-                    choices=["wav", "mp3", "aac"],
-                    value="wav",
-                    label="Output Format"
+        with gr.Row():
+            with gr.Column(scale=2):
+                # Main TTS controls
+                gr.Markdown("## TTS Controls")
+                voice = gr.Dropdown(
+                    choices=voices,
+                    value=voices[0] if voices else None,
+                    label="Voice"
                 )
-                speed = gr.Slider(
-                    minimum=0.5,
-                    maximum=2.0,
-                    value=1.0,
-                    step=0.1,
-                    label="Speed"
+                text = gr.Textbox(
+                    lines=3,
+                    placeholder="Enter text to convert to speech...",
+                    label="Text"
                 )
+                with gr.Row():
+                    format = gr.Radio(
+                        choices=["wav", "mp3", "aac"],
+                        value="wav",
+                        label="Output Format"
+                    )
+                    speed = gr.Slider(
+                        minimum=0.5,
+                        maximum=2.0,
+                        value=1.0,
+                        step=0.1,
+                        label="Speed"
+                    )
+
+            with gr.Column(scale=1):
+                # Speed dial section
+                gr.Markdown("## Speed Dial")
+                preset_dropdown = gr.Dropdown(
+                    choices=preset_names,
+                    value=preset_names[0] if preset_names else None,
+                    label="Saved Presets",
+                    interactive=True
+                )
+                preset_name = gr.Textbox(
+                    placeholder="Enter preset name...",
+                    label="New Preset Name"
+                )
+                with gr.Row():
+                    load_preset = gr.Button("Load")
+                    save_preset = gr.Button("Save Current")
+                    delete_preset = gr.Button("Delete")
+                gr.HTML("""
+                <div style="background-color: var(--block-background-fill); padding: 10px 15px; text-align: center; border-radius: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; min-height: 50px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--block-border-color);">
+                    <strong style="color: var(--body-text-color);">Made With ❤️</strong>
+                </div>
+                """)
+
+        # Generate button row
+        with gr.Row():
             generate = gr.Button("Generate Speech")
 
-            # Speed dial section
-            gr.Markdown("## Speed Dial")
-            preset_dropdown = gr.Dropdown(
-                choices=preset_names,
-                value=preset_names[0] if preset_names else None,
-                label="Saved Presets",
-                interactive=True
-            )
-            preset_name = gr.Textbox(
-                placeholder="Enter preset name...",
-                label="New Preset Name"
-            )
-            with gr.Row():
-                load_preset = gr.Button("Load")
-                save_preset = gr.Button("Save Current")
-                delete_preset = gr.Button("Delete")
-
-            # Output section
-            output = gr.Audio(label="Generated Audio")
+        # Output in full width below
+        output = gr.Audio(label="Generated Audio")
 
         # Function to load a preset
         def load_preset_fn(preset_name):
