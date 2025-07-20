@@ -350,14 +350,14 @@ def create_interface(server_name="127.0.0.1", server_port=7860):
                     save_preset = gr.Button("Save Current")
                     delete_preset = gr.Button("Delete")
                 gr.HTML("""
-                <div style="background-color: var(--block-background-fill); padding: 10px 15px; text-align: center; border-radius: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; min-height: 50px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--block-border-color);">
+                <div style="background-color: var(--block-background-fill); padding: 12px 15px; text-align: center; border-radius: 8px; margin: 2px 0; width: 100%; box-sizing: border-box; min-height: 70px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--block-border-color);">
                     <strong style="color: var(--body-text-color);">Made With ❤️</strong>
                 </div>
                 """)
 
-        # Generate button row
+        # Generate button row (moved up)
         with gr.Row():
-            generate = gr.Button("Generate Speech")
+            generate = gr.Button("Generate Speech", size="lg")
 
         # Output in full width below
         output = gr.Audio(label="Generated Audio")
