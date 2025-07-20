@@ -301,13 +301,20 @@ def create_interface(server_name="127.0.0.1", server_port=7860):
     preset_names = speed_dial.get_preset_names()
 
     # Create interface
-    with gr.Blocks(title="Kokoro TTS Generator") as interface:
+    with gr.Blocks(title="Kokoro TTS Generator", fill_height=True) as interface:
         gr.Markdown("# Kokoro TTS Generator")
 
         with gr.Row():
             with gr.Column(scale=2):
-                # Main TTS controls
                 gr.Markdown("## TTS Controls")
+            
+            with gr.Column(scale=1):
+                gr.Markdown("## Speed Dial")
+                
+        with gr.Row(equal_height=True):
+            with gr.Column(scale=2):
+                # Main TTS controls
+                
                 voice = gr.Dropdown(
                     choices=voices,
                     value=voices[0] if voices else None,
@@ -318,6 +325,22 @@ def create_interface(server_name="127.0.0.1", server_port=7860):
                     placeholder="Enter text to convert to speech...",
                     label="Text"
                 )
+
+            with gr.Column(scale=1):
+            # Speed dial section
+                preset_dropdown = gr.Dropdown(
+                    choices=preset_names,
+                    value=preset_names[0] if preset_names else None,
+                    label="Saved Presets",
+                    interactive=True
+                )
+                preset_name = gr.Textbox(
+                    placeholder="Enter preset name...",
+                    label="New Preset Name"
+                )
+
+        with gr.Row(equal_height=True):
+            with gr.Column(scale=2):
                 with gr.Row():
                     format = gr.Radio(
                         choices=["wav", "mp3", "aac"],
@@ -333,34 +356,19 @@ def create_interface(server_name="127.0.0.1", server_port=7860):
                     )
 
             with gr.Column(scale=1):
-                # Speed dial section
-                gr.Markdown("## Speed Dial")
-                preset_dropdown = gr.Dropdown(
-                    choices=preset_names,
-                    value=preset_names[0] if preset_names else None,
-                    label="Saved Presets",
-                    interactive=True
-                )
-                preset_name = gr.Textbox(
-                    placeholder="Enter preset name...",
-                    label="New Preset Name"
-                )
-                with gr.Row():
-                    load_preset = gr.Button("Load")
-                    save_preset = gr.Button("Save Current")
-                    delete_preset = gr.Button("Delete")
-                gr.HTML("""
-                <div style="background-color: var(--block-background-fill); padding: 12px 15px; text-align: center; border-radius: 8px; margin: 2px 0; width: 100%; box-sizing: border-box; min-height: 70px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--block-border-color);">
-                    <strong style="color: var(--body-text-color);">Made With ❤️</strong>
-                </div>
-                """)
+                load_preset = gr.Button("Load")
+                save_preset = gr.Button("Save Current")
 
-        # Generate button row (moved up)
         with gr.Row():
-            generate = gr.Button("Generate Speech", size="lg")
+            with gr.Column(scale=2):
+                generate = gr.Button("Generate Speech")
 
-        # Output in full width below
-        output = gr.Audio(label="Generated Audio")
+            with gr.Column(scale=1):
+                delete_preset = gr.Button("Delete")
+
+        with gr.Row():
+            # Output section
+            output = gr.Audio(label="Generated Audio")
 
         # Function to load a preset
         def load_preset_fn(preset_name):
@@ -516,14 +524,6 @@ def cleanup_resources():
                     pass
             except Exception as ce:
                 print(f"Error clearing CUDA memory: {type(ce).__name__}: {ce}")
-
-        # Restore original functions
-        try:
-            from models import _cleanup_monkey_patches
-            _cleanup_monkey_patches()
-            print("Monkey patches restored")
-        except Exception as pe:
-            print(f"Error restoring monkey patches: {type(pe).__name__}: {pe}")
 
         # Final garbage collection
         try:

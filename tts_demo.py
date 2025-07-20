@@ -456,13 +456,6 @@ def main() -> None:
                 except Exception as cuda_error:
                     print(f"Error clearing CUDA cache: {cuda_error}")
 
-            # Make sure patched functions are restored
-            try:
-                from models import _cleanup_monkey_patches
-                _cleanup_monkey_patches()
-                print("Monkey patches restored")
-            except Exception as patch_error:
-                print(f"Error restoring monkey patches: {patch_error}")
 
             # Final garbage collection
             try:
