@@ -525,14 +525,6 @@ def cleanup_resources():
             except Exception as ce:
                 print(f"Error clearing CUDA memory: {type(ce).__name__}: {ce}")
 
-        # Restore original functions
-        try:
-            from models import _cleanup_monkey_patches
-            _cleanup_monkey_patches()
-            print("Monkey patches restored")
-        except Exception as pe:
-            print(f"Error restoring monkey patches: {type(pe).__name__}: {pe}")
-
         # Final garbage collection
         try:
             import gc
