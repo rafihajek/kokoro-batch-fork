@@ -16,3 +16,24 @@ tqdm  # Progress bars
 psutil  # System and process monitoring
 packaging  # Version parsing for dependency checking
 numpy  # Numerical computing
+underthesea
+
+# Japan Language Libraries
+fugashi[unidic]
+jaconv
+mojimoji
+pyopenjtalk
+
+# Korean Language Libraries
+jamo
+nltk
+
+# Mandarin Language Libraries
+cn2an
+jieba
+ordered-set
+pypinyin
+pypinyin-dict
+
+# Hebrew Language Libraries
+https://files.pythonhosted.org/packages/44/17/9efdef222f2fc8e1ca721d919738d69d8b2358554a99f27b0764905f60fd/mishkal_hebrew-0.3.2-py3-none-any.whl
