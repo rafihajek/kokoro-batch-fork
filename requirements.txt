@@ -15,7 +15,7 @@ spacy  # For text processing
 tqdm  # Progress bars
 psutil  # System and process monitoring
 packaging  # Version parsing for dependency checking
-numpy  # Numerical computing
+numpy<2.0 # Numerical computing
 underthesea
 
 # Japan Language Libraries
