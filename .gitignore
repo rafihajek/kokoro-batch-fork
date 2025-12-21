@@ -38,3 +38,12 @@ voices/
 voices/*.pt
 voices/**/*.pt
 config.json
+
+# Generated audio and input files
+outputs/
+inputs/
+*.wav
+*.mp3
+
+# Cache
+.cache/
