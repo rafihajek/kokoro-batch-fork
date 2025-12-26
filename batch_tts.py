@@ -15,13 +15,13 @@ Usage:
     python batch_tts.py --merge SESSION_ID        # Manually merge a session
 
 Custom Session Names:
-    Use --name to give sessions descriptive names (used for output folder):
+    Use --name to give sessions descriptive names (used for output folder AND filename):
 
     python batch_tts.py --file book.pdf --pages 92-113 --name "Ch7-The-Godfather" --voice af_heart
     python batch_tts.py --file book.pdf --pages 114-127 --name "Ch8-The-Omnivore" --voice af_heart
 
-    Output will be saved to: outputs/batch/Ch7-The-Godfather/final.wav
-    Without --name, output uses a content hash: outputs/batch/abc123def/final.wav
+    Output will be saved to: outputs/batch/Ch7-The-Godfather/Ch7-The-Godfather.wav
+    Without --name, output uses a content hash: outputs/batch/abc123def/abc123def.wav
 
     IMPORTANT: When running in background/non-interactive mode, always specify --voice
     to avoid the interactive voice selection prompt.
@@ -262,6 +262,48 @@ def clean_for_tts(text: str) -> str:
 
     # Email addresses
     text = re.sub(r'\S+@\S+\.\S+', '', text)
+
+    # =========================================================================
+    # 6. Markdown formatting cleanup
+    # =========================================================================
+
+    # Tables - remove entirely (header rows, separator rows, data rows)
+    text = re.sub(r'^\|.+\|$', '', text, flags=re.MULTILINE)
+
+    # Headers - remove # symbols, keep text
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+
+    # Bold/italic - keep text, remove markers
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # **bold**
+    text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'\1', text)  # *italic* (not **)
+    text = re.sub(r'__(.+?)__', r'\1', text)      # __bold__
+    text = re.sub(r'(?<!_)_(?!_)(.+?)(?<!_)_(?!_)', r'\1', text)  # _italic_ (not __)
+
+    # Links - keep text, drop URL
+    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+
+    # Code blocks - remove entirely
+    text = re.sub(r'```[\s\S]*?```', '', text)
+
+    # Inline code - keep text
+    text = re.sub(r'`([^`]+)`', r'\1', text)
+
+    # Horizontal rules - convert to pause
+    text = re.sub(r'^-{3,}$', '.', text, flags=re.MULTILINE)
+    text = re.sub(r'^\*{3,}$', '.', text, flags=re.MULTILINE)
+
+    # Bullet points - remove markers
+    text = re.sub(r'^[-*+]\s+', '', text, flags=re.MULTILINE)
+
+    # Blockquotes - remove > marker
+    text = re.sub(r'^>\s*', '', text, flags=re.MULTILINE)
+
+    # Task lists - remove checkbox markers
+    text = re.sub(r'^\s*[-*+]\s*\[[x ]\]\s*', '', text, flags=re.MULTILINE | re.IGNORECASE)
+
+    # =========================================================================
+    # 7. Final cleanup
+    # =========================================================================
 
     # Clean up any double spaces we created
     text = re.sub(r'  +', ' ', text)
@@ -684,7 +726,9 @@ def merge_chunks(session_id: str) -> bool:
 
     # Concatenate
     final_audio = np.concatenate(all_audio)
-    final_path = session_dir / "final.wav"
+
+    # Name the final file after the session (uses --name if provided, else hash)
+    final_path = session_dir / f"{session_id}.wav"
 
     sf.write(str(final_path), final_audio, SAMPLE_RATE)
     duration_mins = len(final_audio) / SAMPLE_RATE / 60
