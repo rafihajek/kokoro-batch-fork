@@ -52,7 +52,10 @@ import os
 os.chdir(SCRIPT_DIR)
 
 # Constants
-CHUNK_SIZE = 2500  # Characters per chunk (safe for Kokoro's limits)
+# Kokoro limit: 510 phoneme tokens per segment (~200-400 chars for English)
+# split_pattern divides chunks into segments; waterfall splitting handles overflow
+# Larger outer chunks = fewer audio seams when merging
+CHUNK_SIZE = 2000  # More conservative - ensures sentences complete without cutoff
 SAMPLE_RATE = 24000
 DEFAULT_VOICE = "af_heart"
 DEFAULT_SPEED = 1.0
@@ -288,9 +291,10 @@ def clean_for_tts(text: str) -> str:
     # Inline code - keep text
     text = re.sub(r'`([^`]+)`', r'\1', text)
 
-    # Horizontal rules - convert to pause
-    text = re.sub(r'^-{3,}$', '.', text, flags=re.MULTILINE)
-    text = re.sub(r'^\*{3,}$', '.', text, flags=re.MULTILINE)
+    # Horizontal rules - remove entirely, collapse to paragraph break
+    # (lone periods caused weird TTS vocalizations)
+    text = re.sub(r'\n*^-{3,}$\n*', '\n\n', text, flags=re.MULTILINE)
+    text = re.sub(r'\n*^\*{3,}$\n*', '\n\n', text, flags=re.MULTILINE)
 
     # Bullet points - remove markers
     text = re.sub(r'^[-*+]\s+', '', text, flags=re.MULTILINE)
@@ -614,7 +618,10 @@ def generate_chunk(model, text: str, voice_path: Path, speed: float) -> Optional
     all_audio = []
 
     try:
-        generator = model(text, voice=voice_path, speed=speed, split_pattern=r"\n+")
+        # More aggressive splitting to prevent sentence cutoff
+        # Split on: sentences (. ! ?), semicolons, and colons for better segmentation
+        # This ensures each segment stays well under the 510 phoneme token limit
+        generator = model(text, voice=voice_path, speed=speed, split_pattern=r"(?<=[.!?;:])\s+")
         for gs, ps, audio in generator:
             if audio is not None:
                 if isinstance(audio, torch.Tensor):
