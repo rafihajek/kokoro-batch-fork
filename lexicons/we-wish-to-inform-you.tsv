@@ -1,0 +1,63 @@
+# Pronunciation overrides for "We Wish to Inform You That Tomorrow We Will Be
+# Killed with Our Families" (Gourevitch). Format: word<TAB>phonemes
+#
+# Phonemes use Kokoro/misaki's alphabet (American English):
+#   vowels  ɑ (father)  æ (cat)  ə (about)  ɛ (bed)  ɪ (bit)  i (see)  u (boot)  ʊ (book)  ʌ (cup)  ɔ (law)
+#   diphthongs  A (say)  I (my)  O (go)  W (now)  Y (boy)
+#   consonants  ɡ (hard g)  ʤ (j)  ʧ (ch)  ʃ (sh)  ʒ (zh)  ŋ (sing)  ɹ (r)  j (yes)
+#   stress  ˈ primary  ˌ secondary  (placed right before the stressed vowel)
+#
+# Kinyarwanda is spelled phonetically: a=ɑ e=ɛ/A i=i o=O u=u, g is always hard,
+# "c" = ch, "y" = j (yes), "ny" = nj. Stress is approximated for an English narrator.
+# Match is case-sensitive and whole-word; "Kagame's" is handled automatically.
+
+# --- People ---
+Kagame	kəɡˈɑmA
+Habyarimana	hˌɑbjɑɹimˈɑnə
+Mobutu	məbˈutu
+Museveni	musˈɛvəni
+Girumuhatse	ɡˌiɹumuhˈɑtsA
+Ngeze	əŋɡˈɛzA
+Ntakirutimana	əntˌɑkiɹutimˈɑnə
+Ntaki	əntˈɑki
+Sindikubwabo	sˌindikubwˈɑbO
+Karamira	kˌɑɹəmˈiɹə
+Nyirabeza	njˌiɹəbˈɛzə
+Mbonampeka	əmbˌOnɑmpˈɛkə
+Gahima	ɡɑhˈimə
+Bizimungu	bˌizimˈuŋɡu
+Kayibanda	kˌɑjibˈɑndə
+Rwigyema	ɹwiʤˈɛmə
+Kabila	kəbˈilə
+Manase	mɑnˈɑsA
+Dusaidi	dusɑˈidi
+Chantalle	ʃɑntˈɑl
+Agathe	ɑɡˈɑt
+Jean-Baptiste	ʒˌɑnbæptˈist
+
+# --- Places ---
+Nyarubuye	njˌɑɹubˈujA
+Kibeho	kibˈɛhO
+Butare	butˈɑɹA
+Gikongoro	ɡˌikOŋɡˈOɹO
+Gisenyi	ɡisˈɛnji
+Gitarama	ɡˌitəɹˈɑmə
+Kibuye	kibˈujA
+Kibungo	kibˈuŋɡO
+Mugonero	mˌuɡOnˈɛɹO
+Mugunga	muɡˈuŋɡə
+Kitchanga	kiʧˈɑŋɡə
+Ruhengeri	ɹˌuhɛŋɡˈɛɹi
+Arusha	əɹˈuʃə
+Kivu	kˈivu
+Mille	mˈil
+Collines	kOlˈin
+
+# --- Groups, terms, acronyms said as words ---
+Interahamwe	ˌintəɹɑhˈɑmwA
+Banyamulenge	bˌɑnjɑmulˈɛŋɡA
+Kinyarwanda	kˌinjɑɹwˈɑndə
+Mwami	mwˈɑmi
+Kangura	kɑŋɡˈuɹə
+UNAMIR	jˈunəmˌiɹ
+lowtech	lˈOtˌɛk
